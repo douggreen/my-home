@@ -617,6 +617,11 @@ def bulk_update():
     for image_id in image_ids:
         if new_category:
             cursor.execute('UPDATE images SET interior_exterior = ? WHERE id = ?', (new_category, image_id))
+            # Clear the opposite table when switching interior/exterior
+            if new_category == 'interior':
+                cursor.execute('DELETE FROM image_view_angles WHERE image_id = ?', (image_id,))
+            else:  # exterior
+                cursor.execute('DELETE FROM image_rooms WHERE image_id = ?', (image_id,))
         if new_room:
             cursor.execute('UPDATE images SET room = ? WHERE id = ?', (new_room, image_id))
             cursor.execute('DELETE FROM image_rooms WHERE image_id = ?', (image_id,))
@@ -1033,6 +1038,13 @@ def update_category(image_id):
     cursor = conn.cursor()
     cursor.execute('''UPDATE images SET interior_exterior = ?, human_verified = 1, verified_at = datetime('now')
                       WHERE id = ?''', (new_category, image_id))
+
+    # Clear the opposite table when switching interior/exterior
+    if new_category == 'interior':
+        cursor.execute('DELETE FROM image_view_angles WHERE image_id = ?', (image_id,))
+    else:  # exterior
+        cursor.execute('DELETE FROM image_rooms WHERE image_id = ?', (image_id,))
+
     conn.commit()
     conn.close()
 
