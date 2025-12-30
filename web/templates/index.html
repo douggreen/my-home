@@ -19,67 +19,7 @@
         }
 
         .container {
-            display: flex;
             min-height: 100vh;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 250px;
-            background: #fff;
-            padding: 20px;
-            border-right: 1px solid #e0e0e0;
-            overflow-y: auto;
-            position: fixed;
-            height: 100vh;
-        }
-
-        .sidebar h1 {
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-            color: #c73e5a;
-        }
-
-        .sidebar h2 {
-            font-size: 0.9rem;
-            color: #666;
-            margin: 20px 0 10px;
-            text-transform: uppercase;
-        }
-
-        /* Collapsible sections */
-        .sidebar details {
-            margin-bottom: 10px;
-        }
-
-        .sidebar summary {
-            font-size: 0.9rem;
-            color: #666;
-            margin: 15px 0 10px;
-            text-transform: uppercase;
-            cursor: pointer;
-            list-style: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .sidebar summary::-webkit-details-marker {
-            display: none;
-        }
-
-        .sidebar summary::before {
-            content: '▶';
-            font-size: 0.7rem;
-            transition: transform 0.2s;
-        }
-
-        .sidebar details[open] summary::before {
-            transform: rotate(90deg);
-        }
-
-        .sidebar details[open] summary {
-            color: #c73e5a;
         }
 
         .room-list {
@@ -182,15 +122,39 @@
         /* Main content */
         .main {
             flex: 1;
-            margin-left: 250px;
             padding: 20px;
         }
 
         .header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 8px;
             margin-bottom: 20px;
+        }
+
+        .site-title {
+            font-size: 1.2rem;
+            color: #c73e5a;
+            margin: 0;
+        }
+
+        .header-separator {
+            color: #999;
+            font-size: 1.2rem;
+        }
+
+        .header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+            color: #333;
+        }
+
+        .header .image-count {
+            margin-left: auto;
+        }
+
+        .header .filter-toggle-btn {
+            display: none;
         }
 
         .header h2 {
@@ -1072,57 +1036,42 @@
             }
         }
 
-        /* Hamburger button - hidden on desktop */
-        .hamburger-btn {
-            display: none;
-            background: none;
-            border: none;
-            font-size: 1.5rem;
+        /* Location filter dropdown */
+        .location-dropdown {
+            min-width: 280px;
+        }
+
+        .location-dropdown .location-item {
+            padding: 6px 12px;
             cursor: pointer;
-            padding: 8px 12px;
-            margin-right: 10px;
-            color: #333;
         }
 
-        .hamburger-btn:hover {
+        .location-dropdown .location-item:hover {
             background: #f0f0f0;
-            border-radius: 4px;
         }
 
-        /* Sidebar overlay - hidden by default */
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
+        .location-dropdown .location-item.level-0 {
+            font-weight: bold;
+            padding-left: 12px;
         }
 
-        /* Mobile: collapsible sidebar */
+        .location-dropdown .location-item.level-1 {
+            padding-left: 24px;
+        }
+
+        .location-dropdown .location-item.level-2 {
+            padding-left: 36px;
+        }
+
+        .location-dropdown .location-count {
+            color: #999;
+            font-size: 0.85em;
+            margin-left: 4px;
+        }
+
+        /* Mobile styles */
         @media (max-width: 768px) {
-            .hamburger-btn {
-                display: block;
-            }
-
-            .sidebar {
-                transform: translateX(-100%);
-                transition: transform 0.3s ease;
-                z-index: 1001;
-            }
-
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .sidebar-overlay.open {
-                display: block;
-            }
-
             .main {
-                margin-left: 0;
                 padding: 8px;
             }
 
@@ -1130,6 +1079,11 @@
                 padding: 4px 2px;
                 gap: 6px;
                 margin-bottom: 8px;
+                flex-wrap: wrap;
+            }
+
+            .site-title {
+                font-size: 1rem;
             }
 
             .header h2 {
@@ -1144,11 +1098,6 @@
                 font-size: 0.75rem;
                 white-space: nowrap;
                 margin-left: auto;
-            }
-
-            .hamburger-btn {
-                padding: 4px 8px;
-                margin-right: 0;
             }
 
             /* Filter toggle in header on mobile */
@@ -1240,64 +1189,40 @@
         .site-footer a:hover {
             text-decoration: underline;
         }
+
+        /* Favorites filter heart */
+        .favorites-heart {
+            color: #c73e5a;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <aside class="sidebar">
-            <h1>{{ site_title }}</h1>
-            <div class="room-item favorites-item" data-location="favorites">
-                <span>♥ Favorites</span>
-                <span class="room-count" id="favoritesCount">-</span>
-            </div>
-            <details open>
-                <summary>Interior Rooms</summary>
-                <ul class="room-list" id="roomList">
-                    <li class="loading">Loading...</li>
-                </ul>
-            </details>
-            <details>
-                <summary>Exterior Views</summary>
-                <ul class="room-list" id="viewAngleList">
-                    <li class="room-item" data-location="exterior">
-                        <span>All Exterior</span>
-                        <span class="room-count" id="exteriorCount">-</span>
-                    </li>
-                </ul>
-            </details>
-            <details>
-                <summary>Videos</summary>
-                <ul class="room-list">
-                    <li class="room-item" data-location="videos">
-                        <span>All Videos</span>
-                        <span class="room-count" id="videosCount">-</span>
-                    </li>
-                </ul>
-            </details>
-        </aside>
-
-        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-
         <main class="main">
             <div class="header">
-                <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
-                <h2 id="currentRoom">All Interior</h2>
+                <h1 class="site-title">{{ site_title }}</h1>
+                <span class="header-separator">/</span>
+                <h2 id="currentRoom">All Locations</h2>
                 <button class="filter-toggle-btn" onclick="toggleFilters()">Filters</button>
                 <span class="image-count" id="imageCount"></span>
             </div>
             <div class="filter-bar">
                 <div class="filter-group">
-                    <label>Search:</label>
-                    <input type="text" id="searchInput" placeholder="filename, notes, material..." style="width: 180px;" oninput="debounceSearch()">
+                    <input type="text" id="searchInput" placeholder="Search..." style="width: 140px;" oninput="debounceSearch()">
+                </div>
+                <div class="filter-group">
+                    <div class="filter-dropdown-container">
+                        <button class="filter-dropdown-btn" id="locationFilterBtn" onclick="toggleFilterDropdown('locationFilterDropdown')">All Locations</button>
+                        <div class="filter-dropdown location-dropdown" id="locationFilterDropdown">
+                            <input type="text" class="multiselect-search" id="locationFilterSearch" placeholder="Search locations..." oninput="filterLocationsList(this.value)">
+                            <div class="multiselect-options" id="locationFilterOptions"></div>
+                        </div>
+                    </div>
                 </div>
                 <div class="filter-group">
                     <select id="phaseFilter" onchange="applyFilters()">
                         <option value="">All Phases</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <select id="monthFilter" onchange="applyFilters()">
-                        <option value="">All Dates</option>
                     </select>
                 </div>
                 <div class="filter-group" id="materialsFilterGroup">
@@ -1309,10 +1234,13 @@
                         </div>
                     </div>
                 </div>
-                <div class="filter-group" id="roomFilterGroup" style="display: none;">
-                    <select id="roomFilter" onchange="applyFilters()">
-                        <option value="">All Rooms</option>
+                <div class="filter-group">
+                    <select id="monthFilter" onchange="applyFilters()">
+                        <option value="">All Dates</option>
                     </select>
+                </div>
+                <div class="filter-group">
+                    <label><input type="checkbox" id="favoritesOnly" onchange="applyFilters()"> <span class="favorites-heart">♥</span> Favorites</label>
                 </div>
                 <div class="filter-group">
                     <label><input type="checkbox" id="videosOnly" onchange="applyFilters()"> Videos Only</label>
@@ -1375,15 +1303,13 @@
                     <details class="edit-controls">
                         <summary>Edit</summary>
                         <div style="margin: 8px 0; display: flex; gap: 8px; flex-wrap: wrap;">
-                            <div class="multiselect-container">
-                                <button class="btn-link-popup" onclick="toggleDropdown('categoryDropdown')">Category </button>
-                                <div class="multiselect-dropdown" id="categoryDropdown">
-                                    <div class="multiselect-options" id="categoryOptions">
-                                        <label><input type="radio" name="categoryRadio" value="interior"> <span>Interior</span></label>
-                                        <label><input type="radio" name="categoryRadio" value="exterior"> <span>Exterior</span></label>
-                                    </div>
+                            <div class="multiselect-container" id="locationsContainer">
+                                <button class="btn-link-popup" onclick="toggleDropdown('locationsDropdown')">Locations </button>
+                                <div class="multiselect-dropdown" id="locationsDropdown">
+                                    <input type="text" class="multiselect-search" id="locationsSearch" placeholder="Search locations..." oninput="filterLocationsEditList(this.value)">
+                                    <div class="multiselect-options" id="locationsOptions"></div>
                                     <div class="multiselect-footer">
-                                        <button class="btn-save-small" onclick="saveCategoryFromDropdown()">Save</button>
+                                        <button class="btn-save-small" onclick="saveLocationsFromDropdown()">Save</button>
                                     </div>
                                 </div>
                             </div>
@@ -1393,25 +1319,6 @@
                                     <div class="multiselect-options" id="phaseOptions"></div>
                                     <div class="multiselect-footer">
                                         <button class="btn-save-small" onclick="savePhaseFromDropdown()">Save</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="multiselect-container" id="roomsContainer">
-                                <button class="btn-link-popup" onclick="toggleDropdown('roomsDropdown')">Rooms </button>
-                                <div class="multiselect-dropdown" id="roomsDropdown">
-                                    <input type="text" class="multiselect-search" id="roomsSearch" placeholder="Search rooms..." oninput="filterMaterialsList(this.value, 'roomsOptions')">
-                                    <div class="multiselect-options" id="roomsOptions"></div>
-                                    <div class="multiselect-footer">
-                                        <button class="btn-save-small" onclick="saveRoomsFromDropdown()">Save</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="multiselect-container" id="viewsContainer" style="display:none;">
-                                <button class="btn-link-popup" onclick="toggleDropdown('viewsDropdown')">Views </button>
-                                <div class="multiselect-dropdown" id="viewsDropdown">
-                                    <div class="multiselect-options" id="viewsOptions"></div>
-                                    <div class="multiselect-footer">
-                                        <button class="btn-save-small" onclick="saveViewsFromDropdown()">Save</button>
                                     </div>
                                 </div>
                             </div>
@@ -1443,9 +1350,9 @@
                         <h4 style="margin: 0 0 6px 0; font-size: 0.9rem; color: #2d5a2d;">Summary</h4>
                         <div id="summaryText" style="font-size: 0.85rem; line-height: 1.4; color: #333;"></div>
                     </div>
-                    <div id="roomSegmentsPanel" style="padding: 10px; background: #e8f0f8; border-radius: 6px; margin-bottom: 8px;">
-                        <h4 style="margin: 0 0 6px 0; font-size: 0.9rem; color: #2d4a6d;">Rooms</h4>
-                        <div id="roomSegmentsList" style="font-size: 0.85rem;"></div>
+                    <div id="locationSegmentsPanel" style="padding: 10px; background: #e8f0f8; border-radius: 6px; margin-bottom: 8px;">
+                        <h4 style="margin: 0 0 6px 0; font-size: 0.9rem; color: #2d4a6d;">Locations</h4>
+                        <div id="locationSegmentsList" style="font-size: 0.85rem;"></div>
                     </div>
                     <div id="materialSegmentsPanel" style="padding: 10px; background: #f8f0e8; border-radius: 6px; margin-bottom: 8px;">
                         <h4 style="margin: 0 0 6px 0; font-size: 0.9rem; color: #6d4a2d;">Materials</h4>
@@ -1480,12 +1387,11 @@
             <button class="btn-select-all" onclick="selectAll()">All</button>
             <button class="btn-select-all" onclick="clearSelection()">None</button>
         </div>
-        <div class="multiselect-container">
-            <button class="btn-link-popup" onclick="toggleBulkCategoryDropdown()">Category </button>
-            <div class="multiselect-dropdown multiselect-dropdown-up" id="bulkCategoryDropdown">
-                <div class="multiselect-options">
-                    <label><input type="radio" name="bulkCategory" value="interior"> <span>Interior</span></label>
-                    <label><input type="radio" name="bulkCategory" value="exterior"> <span>Exterior</span></label>
+        <div class="multiselect-container" id="bulkLocationsDropdownWrapper">
+            <button class="btn-link-popup" onclick="toggleBulkLocationsDropdown()">Locations </button>
+            <div class="multiselect-dropdown multiselect-dropdown-up" id="bulkLocationsDropdown">
+                <input type="text" class="multiselect-search" id="bulkLocationsSearch" placeholder="Search locations..." oninput="filterBulkLocationsList(this.value)">
+                <div class="multiselect-options" id="bulkLocationsOptions">
                 </div>
             </div>
         </div>
@@ -1493,21 +1399,6 @@
             <button class="btn-link-popup" onclick="toggleBulkPhaseDropdown()">Phase </button>
             <div class="multiselect-dropdown multiselect-dropdown-up" id="bulkPhaseDropdown">
                 <div class="multiselect-options" id="bulkPhaseOptions">
-                </div>
-            </div>
-        </div>
-        <div class="multiselect-container" id="bulkRoomDropdownWrapper">
-            <button class="btn-link-popup" onclick="toggleRoomDropdown()">Rooms </button>
-            <div class="multiselect-dropdown multiselect-dropdown-up" id="bulkRoomDropdown">
-                <input type="text" class="multiselect-search" id="bulkRoomSearch" placeholder="Search rooms..." oninput="filterMaterialsList(this.value, 'bulkRoomOptions')">
-                <div class="multiselect-options" id="bulkRoomOptions">
-                </div>
-            </div>
-        </div>
-        <div class="multiselect-container" id="bulkViewAngleDropdownWrapper" style="display:none;">
-            <button class="btn-link-popup" onclick="toggleViewAngleDropdown()">Views </button>
-            <div class="multiselect-dropdown multiselect-dropdown-up" id="bulkViewAngleDropdown">
-                <div class="multiselect-options" id="bulkViewAngleOptions">
                 </div>
             </div>
         </div>

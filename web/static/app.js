@@ -8,19 +8,6 @@ function displayName(filename) {
     return filename ? filename.replace(/\.[^.]+$/, '') : '';
 }
 
-// Mobile sidebar toggle
-function toggleSidebar() {
-    document.querySelector('.sidebar').classList.toggle('open');
-    document.querySelector('.sidebar-overlay').classList.toggle('open');
-}
-
-function closeSidebarOnMobile() {
-    if (window.innerWidth <= 768) {
-        document.querySelector('.sidebar').classList.remove('open');
-        document.querySelector('.sidebar-overlay').classList.remove('open');
-    }
-}
-
 // Mobile filter toggle
 function toggleFilters() {
     document.querySelector('.filter-bar').classList.toggle('filters-open');
@@ -37,12 +24,15 @@ let allPhases = [];
 let allViewAngles = [];
 let allMaterialCategories = [];
 let allMaterials = {};  // Materials grouped by category
+let allLocations = [];  // Hierarchical location tree
 let currentRoom = null;
 let currentViewAngle = null;
 let currentMaterialCategory = null;
 let currentMaterialId = null;
 let currentMaterialName = null;
 let currentLocation = 'interior';
+let currentLocationId = null;  // New location system
+let currentLocationName = 'All Locations';
 let selectedIds = new Set();
 let searchTimeout = null;
 
@@ -113,9 +103,10 @@ document.addEventListener('DOMContentLoaded', () => {
     loadAllViewAngles();
     loadAllMaterialCategories();
     loadAllMaterials();
+    loadLocations();  // Load hierarchical locations for filter
     loadConstructionPhases();
     loadMonths();
-    loadImages();
+    loadImages();  // Initial load without location filter
 
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
@@ -214,6 +205,7 @@ async function loadRooms() {
         const data = await response.json();
 
         const roomList = document.getElementById('roomList');
+        if (!roomList) return;  // Sidebar removed, skip populating
         roomList.innerHTML = '';
 
         // Add "All Interior" option
@@ -500,7 +492,12 @@ function toggleFilterDropdown(dropdownId) {
         const searchInput = dropdown.querySelector('.multiselect-search');
         if (searchInput) {
             searchInput.value = '';
-            filterMaterialsList('', dropdownId.replace('Dropdown', 'Options'));
+            // Use appropriate filter function based on dropdown type
+            if (dropdownId === 'locationFilterDropdown') {
+                filterLocationsList('');
+            } else {
+                filterMaterialsList('', dropdownId.replace('Dropdown', 'Options'));
+            }
             setTimeout(() => searchInput.focus(), 10);
         }
     }
@@ -537,16 +534,79 @@ async function loadAllRoomNames() {
         const response = await fetch('/api/all_rooms');
         const data = await response.json();
         allRooms = data.rooms;
-
-        // Populate room filter dropdown
-        const roomFilter = document.getElementById('roomFilter');
-        if (roomFilter) {
-            roomFilter.innerHTML = '<option value="">All Rooms</option>' +
-                allRooms.map(room => `<option value="${room}">${room.replace(/-/g, ' ')}</option>`).join('');
-        }
     } catch (error) {
         console.error('Error loading room names:', error);
     }
+}
+
+// Load hierarchical locations for filter dropdown
+async function loadLocations() {
+    try {
+        const response = await fetch('/api/locations');
+        const data = await response.json();
+        allLocations = data.locations;
+        populateLocationDropdown();
+    } catch (error) {
+        console.error('Error loading locations:', error);
+    }
+}
+
+// Populate location filter dropdown with hierarchical structure
+function populateLocationDropdown() {
+    const container = document.getElementById('locationFilterOptions');
+    if (!container) return;
+
+    let html = '<div class="location-item level-0" onclick="selectLocation(null, \'All Locations\')">All Locations</div>';
+
+    function renderLocation(loc, level) {
+        const count = loc.cumulative_count || loc.count || 0;
+        html += `<div class="location-item level-${level}" onclick="selectLocation(${loc.id}, '${loc.full_path.replace(/'/g, "\\'")}')">
+            ${loc.name}<span class="location-count">(${count})</span>
+        </div>`;
+        if (loc.children && loc.children.length > 0) {
+            loc.children.forEach(child => renderLocation(child, level + 1));
+        }
+    }
+
+    allLocations.forEach(loc => renderLocation(loc, 0));
+    container.innerHTML = html;
+}
+
+// Filter locations list by search term
+function filterLocationsList(searchTerm) {
+    const container = document.getElementById('locationFilterOptions');
+    if (!container) return;
+
+    const items = container.querySelectorAll('.location-item');
+    const term = searchTerm.toLowerCase();
+
+    items.forEach(item => {
+        const text = item.textContent.toLowerCase();
+        item.style.display = text.includes(term) ? '' : 'none';
+    });
+}
+
+// Select a location from the filter dropdown
+function selectLocation(locationId, displayName) {
+    currentLocationId = locationId;
+    currentLocationName = displayName;
+
+    // Update button text - show short name for display
+    const btn = document.getElementById('locationFilterBtn');
+    if (btn) {
+        // Show just the last part of the path for the button
+        const shortName = displayName.includes('/') ? displayName.split('/').pop() : displayName;
+        btn.textContent = shortName;
+    }
+
+    // Update header
+    document.getElementById('currentRoom').textContent = displayName.includes('/') ? displayName.split('/').pop() : displayName;
+
+    // Close dropdown
+    document.getElementById('locationFilterDropdown').classList.remove('active');
+
+    // Apply filters
+    applyFilters();
 }
 
 // Toggle bulk category dropdown
@@ -555,9 +615,8 @@ function toggleBulkCategoryDropdown() {
     const isOpening = !dropdown.classList.contains('active');
 
     // Close other dropdowns
-    document.getElementById('bulkRoomDropdown')?.classList.remove('active');
+    document.getElementById('bulkLocationsDropdown')?.classList.remove('active');
     document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
-    document.getElementById('bulkViewAngleDropdown')?.classList.remove('active');
     document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
 
     // Pre-select based on current view
@@ -578,9 +637,8 @@ function toggleBulkPhaseDropdown() {
     const isOpening = !dropdown.classList.contains('active');
 
     // Close other dropdowns
-    document.getElementById('bulkRoomDropdown')?.classList.remove('active');
+    document.getElementById('bulkLocationsDropdown')?.classList.remove('active');
     document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
-    document.getElementById('bulkViewAngleDropdown')?.classList.remove('active');
     document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
 
     // Populate phases if opening
@@ -596,53 +654,13 @@ function toggleBulkPhaseDropdown() {
     dropdown.classList.toggle('active');
 }
 
-function toggleRoomDropdown() {
-    const dropdown = document.getElementById('bulkRoomDropdown');
-    const isOpening = !dropdown.classList.contains('active');
-
-    // Close other dropdowns
-    document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
-    document.getElementById('bulkViewAngleDropdown')?.classList.remove('active');
-    document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
-    document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
-
-    // If opening, populate and set checkboxes based on selected images' current rooms
-    if (isOpening) {
-        const options = document.getElementById('bulkRoomOptions');
-        const selectedRooms = new Set();
-        selectedIds.forEach(id => {
-            const img = currentImages.find(i => i.id === id);
-            if (img && img.rooms) {
-                img.rooms.forEach(room => selectedRooms.add(room));
-            }
-        });
-
-        let html = '';
-        allRooms.forEach(room => {
-            const checked = selectedRooms.has(room) ? 'checked' : '';
-            html += `<label><input type="checkbox" value="${room}" ${checked}> <span>${formatLabel(room)}</span></label>`;
-        });
-        options.innerHTML = html;
-
-        // Clear and focus search input
-        const searchInput = document.getElementById('bulkRoomSearch');
-        if (searchInput) {
-            searchInput.value = '';
-            setTimeout(() => searchInput.focus(), 10);
-        }
-    }
-
-    dropdown.classList.toggle('active');
-}
-
 // Toggle bulk materials dropdown visibility
 function toggleBulkMaterialsDropdown() {
     const dropdown = document.getElementById('bulkMaterialsDropdown');
     const isOpening = !dropdown.classList.contains('active');
 
     // Close other dropdowns
-    document.getElementById('bulkRoomDropdown')?.classList.remove('active');
-    document.getElementById('bulkViewAngleDropdown')?.classList.remove('active');
+    document.getElementById('bulkLocationsDropdown')?.classList.remove('active');
     document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
     document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
 
@@ -671,44 +689,10 @@ function toggleBulkMaterialsDropdown() {
     dropdown.classList.toggle('active');
 }
 
-// Toggle view angle dropdown visibility
-function toggleViewAngleDropdown() {
-    const dropdown = document.getElementById('bulkViewAngleDropdown');
-    const isOpening = !dropdown.classList.contains('active');
-
-    // Close other dropdowns
-    document.getElementById('bulkRoomDropdown')?.classList.remove('active');
-    document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
-    document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
-    document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
-
-    // If opening, populate and set checkboxes based on selected images' current view angles
-    if (isOpening) {
-        const options = document.getElementById('bulkViewAngleOptions');
-        const selectedAngles = new Set();
-        selectedIds.forEach(id => {
-            const img = currentImages.find(i => i.id === id);
-            if (img && img.view_angles) {
-                img.view_angles.forEach(angle => selectedAngles.add(angle));
-            }
-        });
-
-        let html = '';
-        (allViewAngles || []).forEach(angle => {
-            const checked = selectedAngles.has(angle) ? 'checked' : '';
-            html += `<label><input type="checkbox" value="${angle}" ${checked}> <span>${formatLabel(angle)}</span></label>`;
-        });
-        if (options) options.innerHTML = html;
-    }
-
-    dropdown.classList.toggle('active');
-}
-
 // Close dropdowns when clicking outside
 document.addEventListener('click', function(e) {
     if (!e.target.closest('.multiselect-container')) {
-        document.getElementById('bulkRoomDropdown')?.classList.remove('active');
-        document.getElementById('bulkViewAngleDropdown')?.classList.remove('active');
+        document.getElementById('bulkLocationsDropdown')?.classList.remove('active');
         document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
         document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
         document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
@@ -721,10 +705,11 @@ async function loadViewAngles() {
         const response = await fetch('/api/view_angles');
         const data = await response.json();
 
+        const viewList = document.getElementById('viewAngleList');
+        if (!viewList) return;  // Sidebar removed, skip populating
+
         const roomsResponse = await fetch('/api/rooms');
         const roomsData = await roomsResponse.json();
-
-        const viewList = document.getElementById('viewAngleList');
         viewList.innerHTML = '';
 
         // Add "All Exterior" option
@@ -871,19 +856,9 @@ async function loadAllViewAngles() {
     }
 }
 
-// Toggle bulk controls based on interior/exterior/materials
+// Toggle bulk controls based on location (now a no-op since we have unified locations)
 function toggleBulkControls(location) {
-    const roomDropdown = document.querySelector('.dropdown-checkbox');
-    const viewDropdown = document.getElementById('bulkViewAngleDropdownWrapper');
-
-    // Always show room dropdown so you can set category + room together
-    if (roomDropdown) roomDropdown.style.display = 'inline-block';
-
-    if (location === 'exterior') {
-        viewDropdown.style.display = 'inline-block';
-    } else {
-        viewDropdown.style.display = 'none';
-    }
+    // Locations dropdown handles both interior/exterior, no need to toggle
 }
 
 // Load construction phases
@@ -968,10 +943,10 @@ function applyFilters() {
     const showHidden = document.getElementById('showHidden').checked;
     const search = document.getElementById('searchInput').value;
     const videosOnly = document.getElementById('videosOnly').checked;
-    const roomFilterValue = document.getElementById('roomFilter').value;
+    const favoritesOnly = document.getElementById('favoritesOnly')?.checked || false;
 
-    // currentMaterialId is set by selectMaterialFilter() when a specific material is chosen
-    loadImages(currentRoom, currentLocation, phase, month, currentViewAngle, currentMaterialCategory, showHidden, search, '', videosOnly, roomFilterValue, currentMaterialId);
+    // Use new location system
+    loadImages(null, null, phase, month, null, null, showHidden, search, '', videosOnly, currentMaterialId, currentLocationId, favoritesOnly);
     closeFiltersOnMobile();
 }
 
@@ -980,37 +955,40 @@ function clearFilters() {
     document.getElementById('searchInput').value = '';
     document.getElementById('phaseFilter').value = '';
     document.getElementById('monthFilter').value = '';
-    document.getElementById('roomFilter').value = '';
     document.getElementById('showHidden').checked = false;
     document.getElementById('videosOnly').checked = false;
+    if (document.getElementById('favoritesOnly')) {
+        document.getElementById('favoritesOnly').checked = false;
+    }
     currentMaterialId = null;
     currentMaterialName = null;
+    currentLocationId = null;
+    currentLocationName = 'All Locations';
     // Reset materials filter button text
     const materialsFilterBtn = document.getElementById('materialsFilterBtn');
     if (materialsFilterBtn) {
         materialsFilterBtn.textContent = 'All Materials';
     }
+    // Reset location filter button text
+    const locationFilterBtn = document.getElementById('locationFilterBtn');
+    if (locationFilterBtn) {
+        locationFilterBtn.textContent = 'All Locations';
+    }
+    document.getElementById('currentRoom').textContent = 'All Locations';
     applyFilters();
 }
 
 // Toggle filter visibility based on current view
 function updateFilterVisibility() {
+    // With the new location filter, we always show the materials filter
     const materialsFilterGroup = document.getElementById('materialsFilterGroup');
-    const roomFilterGroup = document.getElementById('roomFilterGroup');
-
-    if (currentLocation === 'materials') {
-        // In Materials view, show room filter instead of materials filter
-        materialsFilterGroup.style.display = 'none';
-        roomFilterGroup.style.display = 'flex';
-    } else {
-        // In other views, show materials filter
+    if (materialsFilterGroup) {
         materialsFilterGroup.style.display = 'flex';
-        roomFilterGroup.style.display = 'none';
     }
 }
 
 // Load images with filters
-async function loadImages(room = null, location = 'interior', phase = '', month = '', viewAngle = null, materialCategory = null, showHidden = false, search = '', hasMaterialCategory = '', videosOnly = false, roomFilterValue = '', materialId = null) {
+async function loadImages(room = null, location = 'interior', phase = '', month = '', viewAngle = null, materialCategory = null, showHidden = false, search = '', hasMaterialCategory = '', videosOnly = false, materialId = null, locationId = null, favoritesOnly = false) {
     const grid = document.getElementById('imageGrid');
     grid.innerHTML = '<div class="loading">Loading images...</div>';
 
@@ -1022,19 +1000,29 @@ async function loadImages(room = null, location = 'interior', phase = '', month 
     updateFilterVisibility();
 
     try {
-        let url = `/api/images?location=${location}`;
-        if (room) url += `&room=${encodeURIComponent(room)}`;
-        if (viewAngle) url += `&view_angle=${encodeURIComponent(viewAngle)}`;
-        if (materialCategory) url += `&material_category=${encodeURIComponent(materialCategory)}`;
-        if (phase) url += `&phase=${encodeURIComponent(phase)}`;
-        if (month) url += `&month=${encodeURIComponent(month)}`;
-        if (showHidden) url += `&show_hidden=true`;
-        if (search) url += `&search=${encodeURIComponent(search)}`;
-        if (hasMaterialCategory) url += `&has_material_category=${encodeURIComponent(hasMaterialCategory)}`;
-        if (videosOnly) url += `&videos_only=true`;
-        if (roomFilterValue) url += `&room_filter=${encodeURIComponent(roomFilterValue)}`;
-        if (materialId) url += `&material_id=${materialId}`;
-        if (location === 'favorites') url += `&favorites_only=true`;
+        let url = '/api/images?';
+        const params = [];
+
+        // Use new location_id if provided, otherwise fall back to old system
+        if (locationId) {
+            params.push(`location_id=${locationId}`);
+        } else if (location) {
+            params.push(`location=${location}`);
+            if (room) params.push(`room=${encodeURIComponent(room)}`);
+            if (viewAngle) params.push(`view_angle=${encodeURIComponent(viewAngle)}`);
+        }
+
+        if (materialCategory) params.push(`material_category=${encodeURIComponent(materialCategory)}`);
+        if (phase) params.push(`phase=${encodeURIComponent(phase)}`);
+        if (month) params.push(`month=${encodeURIComponent(month)}`);
+        if (showHidden) params.push('show_hidden=true');
+        if (search) params.push(`search=${encodeURIComponent(search)}`);
+        if (hasMaterialCategory) params.push(`has_material_category=${encodeURIComponent(hasMaterialCategory)}`);
+        if (videosOnly) params.push('videos_only=true');
+        if (materialId) params.push(`material_id=${materialId}`);
+        if (favoritesOnly) params.push('favorites_only=true');
+
+        url += params.join('&');
 
         const response = await fetch(url);
         const data = await response.json();
@@ -1218,24 +1206,14 @@ function clearSelection() {
 async function applyBulkUpdate() {
     if (!canEdit()) return;
 
-    // Get selected category from radio button
-    const categoryRadio = document.querySelector('#bulkCategoryDropdown input[type="radio"]:checked');
-    const newCategory = categoryRadio ? categoryRadio.value : '';
-
     // Get selected phase from radio button
     const phaseRadio = document.querySelector('#bulkPhaseDropdown input[type="radio"]:checked');
     const newPhase = phaseRadio ? phaseRadio.value : '';
 
-    // Get checked rooms from dropdown
-    const checkedRooms = [];
-    document.querySelectorAll('#bulkRoomDropdown input[type="checkbox"]:checked').forEach(cb => {
-        checkedRooms.push(cb.value);
-    });
-
-    // Get checked view angles from dropdown
-    const checkedViewAngles = [];
-    document.querySelectorAll('#bulkViewAngleDropdown input[type="checkbox"]:checked').forEach(cb => {
-        checkedViewAngles.push(cb.value);
+    // Get checked locations from dropdown
+    const checkedLocations = [];
+    document.querySelectorAll('#bulkLocationsDropdown input[type="checkbox"]:checked').forEach(cb => {
+        checkedLocations.push(parseInt(cb.value));
     });
 
     // Get checked materials from dropdown
@@ -1244,8 +1222,8 @@ async function applyBulkUpdate() {
         checkedMaterials.push(parseInt(cb.value));
     });
 
-    if (!newCategory && checkedRooms.length === 0 && checkedViewAngles.length === 0 && checkedMaterials.length === 0 && !newPhase) {
-        alert('Please select a category, room(s), view(s), material(s), or phase to apply');
+    if (checkedLocations.length === 0 && checkedMaterials.length === 0 && !newPhase) {
+        alert('Please select location(s), material(s), or phase to apply');
         return;
     }
 
@@ -1262,9 +1240,7 @@ async function applyBulkUpdate() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 ids,
-                category: newCategory || undefined,
-                rooms: checkedRooms.length > 0 ? checkedRooms : undefined,
-                view_angles: checkedViewAngles.length > 0 ? checkedViewAngles : undefined,
+                location_ids: checkedLocations.length > 0 ? checkedLocations : undefined,
                 material_ids: checkedMaterials.length > 0 ? checkedMaterials : undefined,
                 phase: newPhase || undefined
             })
@@ -1272,22 +1248,17 @@ async function applyBulkUpdate() {
 
         if (response.ok) {
             // Reset and close dropdowns
-            document.querySelectorAll('#bulkCategoryDropdown input[type="radio"]').forEach(r => r.checked = false);
             document.querySelectorAll('#bulkPhaseDropdown input[type="radio"]').forEach(r => r.checked = false);
-            document.querySelectorAll('#bulkRoomDropdown input[type="checkbox"]').forEach(cb => cb.checked = false);
-            document.querySelectorAll('#bulkViewAngleDropdown input[type="checkbox"]').forEach(cb => cb.checked = false);
+            document.querySelectorAll('#bulkLocationsDropdown input[type="checkbox"]').forEach(cb => cb.checked = false);
             document.querySelectorAll('#bulkMaterialsDropdown input[type="checkbox"]').forEach(cb => cb.checked = false);
-            document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
             document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
-            document.getElementById('bulkRoomDropdown')?.classList.remove('active');
-            document.getElementById('bulkViewAngleDropdown')?.classList.remove('active');
+            document.getElementById('bulkLocationsDropdown')?.classList.remove('active');
             document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
 
             // Clear selection and reload
             clearSelection();
             applyFilters();
-            loadRooms();
-            loadViewAngles();
+            loadLocations();
             loadMaterialCategories();
             loadConstructionPhases();
         } else {
@@ -1365,6 +1336,9 @@ function openModal(index) {
     currentIndex = index;
     const img = currentImages[index];
 
+    // Clear selection and hide toolbar when opening modal
+    clearSelection();
+
     // Reset zoom when opening new image
     resetZoom();
 
@@ -1412,25 +1386,13 @@ function openModal(index) {
     document.getElementById('modalMeta').textContent = metaParts.join(' • ');
     document.getElementById('saveStatus').textContent = '';
 
-    // Show location (room for interior, view angle for exterior)
-    let locationText = '';
-    if (img.interior_exterior === 'interior') {
-        const rooms = img.rooms || [];
-        if (rooms.length > 0) {
-            locationText = rooms.map(formatLabel).join(', ');
-        }
-    } else if (img.interior_exterior === 'exterior') {
-        const views = img.view_angles || [];
-        if (views.length > 0) {
-            locationText = views.map(formatLabel).join(', ');
-        }
-    }
-    document.getElementById('modalLocation').textContent = locationText;
+    // Load and show locations from new system
+    loadModalLocations(img.id);
 
     // Show construction phase
     document.getElementById('modalPhase').textContent = img.construction_phase ? formatLabel(img.construction_phase) : '';
 
-    // Show room controls for interior, view angle controls for exterior
+    // Update controls (now a no-op, kept for backwards compatibility)
     updateModalControls(img.interior_exterior);
 
     // Set notes - combine description and material_notes
@@ -1719,7 +1681,7 @@ async function loadTranscription(imageId, filterRoom) {
     const transcriptionText = document.getElementById('transcriptionText');
     const segmentsPanel = document.getElementById('videoSegmentsPanel');
     const summaryText = document.getElementById('summaryText');
-    const roomSegmentsList = document.getElementById('roomSegmentsList');
+    const locationSegmentsList = document.getElementById('locationSegmentsList');
     const materialSegmentsList = document.getElementById('materialSegmentsList');
 
     // Clear previous search and reset transcript visibility
@@ -1757,10 +1719,10 @@ async function loadTranscription(imageId, filterRoom) {
                 document.getElementById('summaryPanel').style.display = 'none';
             }
 
-            // Room segments
-            const roomSegments = data.segments.filter(s => s.segment_type === 'room');
-            if (roomSegments.length > 0) {
-                roomSegmentsList.innerHTML = roomSegments.map(s => `
+            // Location segments
+            const locationSegments = data.segments.filter(s => s.segment_type === 'location');
+            if (locationSegments.length > 0) {
+                locationSegmentsList.innerHTML = locationSegments.map(s => `
                     <div style="margin-bottom: 6px; display: flex; align-items: baseline; gap: 8px;">
                         <a href="#" onclick="seekVideo(${s.start_time}, ${s.end_time}); return false;"
                            style="color: #2d4a6d; text-decoration: none; font-weight: 500; white-space: nowrap;">
@@ -1770,11 +1732,11 @@ async function loadTranscription(imageId, filterRoom) {
                         <span style="color: #666; font-size: 0.8rem;">${s.description || ''}</span>
                     </div>
                 `).join('');
-                document.getElementById('roomSegmentsPanel').style.display = 'block';
+                document.getElementById('locationSegmentsPanel').style.display = 'block';
 
-                // Auto-seek to filtered room if provided
+                // Auto-seek to filtered location if provided
                 if (filterRoom) {
-                    const matchingSegment = roomSegments.find(s => s.segment_value === filterRoom);
+                    const matchingSegment = locationSegments.find(s => s.segment_value === filterRoom);
                     if (matchingSegment) {
                         // Small delay to allow video to load
                         setTimeout(() => {
@@ -1783,7 +1745,7 @@ async function loadTranscription(imageId, filterRoom) {
                     }
                 }
             } else {
-                document.getElementById('roomSegmentsPanel').style.display = 'none';
+                document.getElementById('locationSegmentsPanel').style.display = 'none';
             }
 
             // Material segments
@@ -1823,19 +1785,9 @@ function updateNavButtons() {
 }
 
 // Update modal controls visibility based on category
+// Now a no-op since we have a unified locations dropdown
 function updateModalControls(category) {
-    const roomsContainer = document.getElementById('roomsContainer');
-    const viewsContainer = document.getElementById('viewsContainer');
-
-    if (category === 'exterior') {
-        // Exterior: show views, hide rooms
-        roomsContainer.style.display = 'none';
-        viewsContainer.style.display = 'block';
-    } else {
-        // Interior: show rooms, hide views
-        roomsContainer.style.display = 'block';
-        viewsContainer.style.display = 'none';
-    }
+    // Locations dropdown handles both interior/exterior
 }
 
 // Close modal
@@ -1850,8 +1802,7 @@ function closeModal() {
 
     // Refresh the view and dropdown lists to reflect any edits made
     applyFilters();
-    loadAllViewAngles();
-    loadAllRoomNames();
+    loadLocations();
 }
 
 // Navigate between images
@@ -2096,13 +2047,13 @@ function toggleDropdown(dropdownId) {
 
     if (!isActive) {
         // Populate and show this dropdown
-        if (dropdownId === 'roomsDropdown') {
-            populateRoomsDropdown();
+        if (dropdownId === 'locationsDropdown') {
+            populateLocationsDropdown();
             // Clear search input when opening and focus
-            const roomsSearchInput = document.getElementById('roomsSearch');
-            if (roomsSearchInput) {
-                roomsSearchInput.value = '';
-                setTimeout(() => roomsSearchInput.focus(), 10);
+            const locationsSearchInput = document.getElementById('locationsSearch');
+            if (locationsSearchInput) {
+                locationsSearchInput.value = '';
+                setTimeout(() => locationsSearchInput.focus(), 10);
             }
         } else if (dropdownId === 'materialsDropdown') {
             populateMaterialsDropdown();
@@ -2116,8 +2067,6 @@ function toggleDropdown(dropdownId) {
             populateCategoryDropdown();
         } else if (dropdownId === 'phaseDropdown') {
             populatePhaseDropdown();
-        } else if (dropdownId === 'viewsDropdown') {
-            populateViewsDropdown();
         }
         dropdown.classList.add('active');
     }
@@ -2391,57 +2340,175 @@ async function savePhaseFromDropdown() {
     }
 }
 
-// Populate views dropdown
-function populateViewsDropdown() {
+// Load and display locations for modal
+async function loadModalLocations(imageId) {
+    const locationEl = document.getElementById('modalLocation');
+    try {
+        const response = await fetch(`/api/images/${imageId}/locations`);
+        const data = await response.json();
+        const locationNames = [];
+        data.location_ids.forEach(id => {
+            const loc = findLocationById(id);
+            if (loc) locationNames.push(loc.name);
+        });
+        locationEl.textContent = locationNames.join(', ') || '';
+    } catch (error) {
+        console.error('Error loading modal locations:', error);
+        locationEl.textContent = '';
+    }
+}
+
+// Populate locations dropdown for editing
+async function populateLocationsDropdown() {
     const img = currentImages[currentIndex];
-    const container = document.getElementById('viewsOptions');
+    const container = document.getElementById('locationsOptions');
     if (!container) return;
 
-    const linkedViews = new Set(img.view_angles || []);
-
-    let html = '';
-    for (const view of allViewAngles || []) {
-        const checked = linkedViews.has(view) ? 'checked' : '';
-        html += `<label>
-            <input type="checkbox" value="${view}" ${checked}>
-            <span>${formatLabel(view)}</span>
-        </label>`;
+    // Get currently linked location IDs for this image
+    let linkedLocationIds = new Set();
+    try {
+        const response = await fetch(`/api/images/${img.id}/locations`);
+        const data = await response.json();
+        data.location_ids.forEach(id => linkedLocationIds.add(id));
+    } catch (error) {
+        console.error('Error loading linked locations:', error);
     }
+
+    // Build checkboxes with hierarchy
+    let html = '';
+    function renderLocation(loc, level) {
+        const checked = linkedLocationIds.has(loc.id) ? 'checked' : '';
+        const indent = '&nbsp;'.repeat(level * 4);
+        html += `<label style="padding-left: ${level * 12}px;">
+            <input type="checkbox" value="${loc.id}" ${checked}>
+            <span>${loc.name}</span>
+        </label>`;
+        if (loc.children && loc.children.length > 0) {
+            loc.children.forEach(child => renderLocation(child, level + 1));
+        }
+    }
+    allLocations.forEach(loc => renderLocation(loc, 0));
     container.innerHTML = html;
 }
 
-// Save views from dropdown
-async function saveViewsFromDropdown() {
+// Filter locations list in edit dropdown
+function filterLocationsEditList(searchText) {
+    const container = document.getElementById('locationsOptions');
+    if (!container) return;
+    const searchLower = searchText.toLowerCase().trim();
+    const labels = container.querySelectorAll('label');
+
+    labels.forEach(label => {
+        const text = label.textContent.toLowerCase();
+        const matches = searchLower === '' || text.includes(searchLower);
+        label.style.display = matches ? 'flex' : 'none';
+    });
+}
+
+// Save locations from dropdown
+async function saveLocationsFromDropdown() {
+    if (!canEdit()) return;
     const img = currentImages[currentIndex];
     const status = document.getElementById('saveStatus');
 
-    const selectedViews = [];
-    document.querySelectorAll('#viewsOptions input[type="checkbox"]:checked').forEach(cb => {
-        selectedViews.push(cb.value);
+    const selectedLocationIds = [];
+    document.querySelectorAll('#locationsOptions input[type="checkbox"]:checked').forEach(cb => {
+        selectedLocationIds.push(parseInt(cb.value));
     });
 
     status.textContent = 'Saving...';
 
     try {
-        const response = await fetch(`/api/images/${img.id}/view_angles`, {
+        const response = await fetch(`/api/images/${img.id}/locations`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ view_angles: selectedViews })
+            body: JSON.stringify({ location_ids: selectedLocationIds })
         });
 
         if (response.ok) {
             status.textContent = 'Saved!';
 
-            img.view_angles = selectedViews;
+            // Update displayed locations
+            const locationNames = [];
+            selectedLocationIds.forEach(id => {
+                const loc = findLocationById(id);
+                if (loc) locationNames.push(loc.name);
+            });
+            document.getElementById('modalLocation').textContent = locationNames.join(', ');
 
-            document.getElementById('viewsDropdown').classList.remove('active');
-            loadViewAngles();
+            document.getElementById('locationsDropdown').classList.remove('active');
+            loadLocations();
             setTimeout(() => { status.textContent = ''; }, 2000);
         } else {
             status.textContent = 'Error saving';
         }
     } catch (error) {
-        console.error('Error saving views:', error);
+        console.error('Error saving locations:', error);
         status.textContent = 'Error saving';
     }
+}
+
+// Find location by ID in the hierarchical tree
+function findLocationById(id) {
+    function search(locations) {
+        for (const loc of locations) {
+            if (loc.id === id) return loc;
+            if (loc.children && loc.children.length > 0) {
+                const found = search(loc.children);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+    return search(allLocations);
+}
+
+// Toggle bulk locations dropdown
+function toggleBulkLocationsDropdown() {
+    const dropdown = document.getElementById('bulkLocationsDropdown');
+    const isOpening = !dropdown.classList.contains('active');
+
+    // Close other dropdowns
+    document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
+    document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
+    document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
+
+    if (isOpening) {
+        const options = document.getElementById('bulkLocationsOptions');
+        let html = '';
+        function renderLocation(loc, level) {
+            html += `<label style="padding-left: ${level * 12}px;">
+                <input type="checkbox" value="${loc.id}">
+                <span>${loc.name}</span>
+            </label>`;
+            if (loc.children && loc.children.length > 0) {
+                loc.children.forEach(child => renderLocation(child, level + 1));
+            }
+        }
+        allLocations.forEach(loc => renderLocation(loc, 0));
+        options.innerHTML = html;
+
+        // Clear and focus search input
+        const searchInput = document.getElementById('bulkLocationsSearch');
+        if (searchInput) {
+            searchInput.value = '';
+            setTimeout(() => searchInput.focus(), 10);
+        }
+    }
+
+    dropdown.classList.toggle('active');
+}
+
+// Filter bulk locations list
+function filterBulkLocationsList(searchText) {
+    const container = document.getElementById('bulkLocationsOptions');
+    if (!container) return;
+    const searchLower = searchText.toLowerCase().trim();
+    const labels = container.querySelectorAll('label');
+
+    labels.forEach(label => {
+        const text = label.textContent.toLowerCase();
+        const matches = searchLower === '' || text.includes(searchLower);
+        label.style.display = matches ? 'flex' : 'none';
+    });
 }
