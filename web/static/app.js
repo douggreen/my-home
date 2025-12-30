@@ -475,8 +475,8 @@ function populateMaterialsFilterDropdown() {
         html += `<div class="multiselect-category">${category}</div>`;
 
         for (const mat of materials) {
-            const displayName = mat.manufacturer ? `${mat.name} (${mat.manufacturer})` : mat.name;
-            html += `<label class="filter-option" onclick="selectMaterialFilter(${mat.id}, '${displayName.replace(/'/g, "\\'")}')">
+            const displayName = `${mat.name} (${mat.count})`;
+            html += `<label class="filter-option" onclick="selectMaterialFilter(${mat.id}, '${mat.name.replace(/'/g, "\\'")}')">
                 <span>${displayName}</span>
             </label>`;
         }

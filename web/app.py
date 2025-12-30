@@ -730,13 +730,16 @@ def get_all_material_categories():
 
 @app.route('/api/all_materials')
 def get_all_materials():
-    """Get all materials grouped by category."""
+    """Get all materials grouped by category, with image counts. Only returns materials with at least one linked image."""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT id, category, name, manufacturer
-        FROM materials
-        ORDER BY CASE WHEN category = 'labels' THEN 0 ELSE 1 END, category, name
+        SELECT m.id, m.category, m.name, m.manufacturer, COUNT(im.image_id) as image_count
+        FROM materials m
+        JOIN image_materials im ON m.id = im.material_id
+        GROUP BY m.id
+        HAVING image_count > 0
+        ORDER BY CASE WHEN m.category = 'labels' THEN 0 ELSE 1 END, m.category, m.name
     ''')
 
     materials_by_category = {}
@@ -747,7 +750,8 @@ def get_all_materials():
         materials_by_category[cat].append({
             'id': row['id'],
             'name': row['name'],
-            'manufacturer': row['manufacturer']
+            'manufacturer': row['manufacturer'],
+            'count': row['image_count']
         })
 
     conn.close()
