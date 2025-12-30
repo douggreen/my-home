@@ -101,6 +101,19 @@ def timestamp_to_datetime(ts: str | int) -> str | None:
         return None
 
 
+def parse_mdls_date(date_str: str) -> str | None:
+    """Parse mdls date format (e.g., '2025-12-27 19:26:56 +0000') to ISO datetime."""
+    if not date_str or date_str == '(null)':
+        return None
+    try:
+        # Remove timezone offset and parse
+        # Format: "2025-12-27 19:26:56 +0000"
+        date_part = ' '.join(str(date_str).split()[:2])  # "2025-12-27 19:26:56"
+        return date_part
+    except (ValueError, AttributeError):
+        return None
+
+
 def import_media_file(conn: sqlite3.Connection, media_path: Path) -> bool:
     """Import a single media file's metadata into the database."""
     cursor = conn.cursor()
@@ -132,6 +145,10 @@ def import_media_file(conn: sqlite3.Connection, media_path: Path) -> bool:
     photo_taken_at = None
     if 'photoTakenTime' in google_meta:
         photo_taken_at = timestamp_to_datetime(google_meta['photoTakenTime'].get('timestamp'))
+
+    # Fall back to EXIF date if no Google Photos date
+    if not photo_taken_at:
+        photo_taken_at = parse_mdls_date(exif.get('kMDItemContentCreationDate'))
 
     uploaded_at = None
     if 'creationTime' in google_meta:
