@@ -22,103 +22,6 @@
             min-height: 100vh;
         }
 
-        .room-list {
-            list-style: none;
-        }
-
-        .room-item {
-            padding: 10px 12px;
-            margin: 4px 0;
-            border-radius: 6px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            transition: background 0.2s;
-        }
-
-        .room-item:hover {
-            background: #f0f0f0;
-        }
-
-        .room-item.active {
-            background: #c73e5a;
-            color: #fff;
-        }
-
-        .room-count {
-            background: rgba(0,0,0,0.08);
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 0.8rem;
-        }
-
-        .room-item.active .room-count {
-            background: rgba(255,255,255,0.25);
-        }
-
-        /* Favorites styling */
-        .favorites-item {
-            color: #c73e5a;
-            margin-bottom: 15px;
-            margin-left: -15px;
-        }
-
-        .favorites-item.active {
-            background: #c73e5a;
-            color: #fff;
-        }
-
-        .favorites-item.active .room-count {
-            background: rgba(255, 255, 255, 0.25);
-        }
-
-        /* Room hierarchy */
-        .room-group {
-            margin: 4px 0;
-        }
-
-        .room-group summary {
-            list-style: none;
-        }
-
-        .room-group summary::-webkit-details-marker {
-            display: none;
-        }
-
-        .room-parent {
-            font-weight: 500;
-        }
-
-        .room-parent::before {
-            content: '▶';
-            font-size: 0.7rem;
-            margin-right: 6px;
-            transition: transform 0.2s;
-        }
-
-        .room-group[open] > .room-parent::before {
-            transform: rotate(90deg);
-        }
-
-        .room-children {
-            margin-left: 16px;
-            border-left: 2px solid #e0e0e0;
-            padding-left: 8px;
-        }
-
-        .room-child {
-            font-size: 0.95rem;
-        }
-
-        .room-group-inline {
-            margin: 4px 0;
-        }
-
-        .room-group-label {
-            padding: 10px 12px 4px 12px;
-            color: #666;
-        }
-
         /* Main content */
         .main {
             flex: 1;
@@ -241,7 +144,7 @@
             text-overflow: ellipsis;
         }
 
-        .image-room {
+        .image-location {
             font-size: 0.9rem;
             color: #c73e5a;
             margin-top: 4px;
@@ -756,13 +659,6 @@
             border-color: #666;
         }
 
-        /* Room/view/material checkboxes in modal */
-        #roomControls, #viewAngleControls, #materialCategoryControls {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
         .checkbox-group {
             display: flex;
             flex-wrap: wrap;
@@ -1174,7 +1070,7 @@
         body.readonly-mode .bulk-actions,
         body.readonly-mode .modal-right select,
         body.readonly-mode .modal-right button,
-        body.readonly-mode .modal-right .rooms-dropdown,
+        body.readonly-mode .modal-right .locations-dropdown,
         body.readonly-mode .modal-right .materials-dropdown,
         body.readonly-mode .modal-right textarea,
         body.readonly-mode .edit-controls {
@@ -1203,7 +1099,7 @@
             <div class="header">
                 <h1 class="site-title">{{ site_title }}</h1>
                 <span class="header-separator">/</span>
-                <h2 id="currentRoom">All Locations</h2>
+                <h2 id="currentLocationHeader">All Locations</h2>
                 <button class="filter-toggle-btn" onclick="toggleFilters()">Filters</button>
                 <span class="image-count" id="imageCount"></span>
             </div>

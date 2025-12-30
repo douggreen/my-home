@@ -96,20 +96,15 @@ def get_status():
 
 @app.route('/api/images')
 def get_images():
-    """Get images, optionally filtered by location_id, room, view_angle, material_category, construction_phase, date range, search text, or interior/exterior."""
-    room = request.args.get('room')
-    location = request.args.get('location')  # interior, exterior, materials, or None
-    location_id = request.args.get('location_id')  # New hierarchical location system
-    view_angle = request.args.get('view_angle')
-    material_category = request.args.get('material_category')
+    """Get images, optionally filtered by location_id, construction_phase, date range, search text, material, or favorites."""
+    location_id = request.args.get('location_id')
     phase = request.args.get('phase')
     month = request.args.get('month')  # Format: YYYY-MM
     show_hidden = request.args.get('show_hidden', 'false') == 'true'
     search = request.args.get('search', '').strip()
-    has_material_category = request.args.get('has_material_category')  # Find images linked to this material category
-    videos_only = request.args.get('videos_only', 'false') == 'true'  # Filter to only show videos
-    favorites_only = request.args.get('favorites_only', 'false') == 'true'  # Filter to only show favorites
-    material_id = request.args.get('material_id')  # Filter by specific material ID
+    videos_only = request.args.get('videos_only', 'false') == 'true'
+    favorites_only = request.args.get('favorites_only', 'false') == 'true'
+    material_id = request.args.get('material_id')
 
     conn = get_db()
     cursor = conn.cursor()
@@ -117,7 +112,6 @@ def get_images():
     # Build query dynamically
     conditions = []
     params = []
-    join_clause = ""
     extra_joins = []
 
     # Filter by hidden status: show_hidden=true shows ONLY hidden, otherwise show non-hidden
@@ -135,51 +129,6 @@ def get_images():
     if favorites_only:
         conditions.append("i.favorite = 1")
 
-    # New location_id filter takes precedence over old location system
-    # If location_id is provided, skip old location filtering (handled later in the code)
-    # If neither location_id nor location is provided, show all images (no location filter)
-    if not location_id and location:
-        if location == 'exterior':
-            conditions.append("i.interior_exterior = 'exterior'")
-            if view_angle:
-                if view_angle == 'unclassified':
-                    # Images with no view angles in junction table
-                    conditions.append("NOT EXISTS (SELECT 1 FROM image_view_angles iva WHERE iva.image_id = i.id)")
-                else:
-                    # Use junction table to find images with this view angle
-                    join_clause = "JOIN image_view_angles iva ON i.id = iva.image_id"
-                    conditions.append("iva.view_angle = ?")
-                    params.append(view_angle)
-        elif location == 'materials':
-            # Materials tab shows images with linked materials OR videos with material segments
-            if material_category:
-                # Images with materials in this category OR videos with material segments matching this category
-                conditions.append("""(
-                    EXISTS (SELECT 1 FROM image_materials im JOIN materials m ON im.material_id = m.id
-                            WHERE im.image_id = i.id AND m.category = ?)
-                    OR EXISTS (SELECT 1 FROM video_segments vs JOIN materials m ON lower(vs.segment_value) = lower(m.name)
-                               WHERE vs.image_id = i.id AND vs.segment_type = 'material' AND m.category = ?)
-                )""")
-                params.append(material_category)
-                params.append(material_category)
-            else:
-                # Show all images with any linked materials OR videos with material segments
-                conditions.append("""(
-                    EXISTS (SELECT 1 FROM image_materials im WHERE im.image_id = i.id)
-                    OR EXISTS (SELECT 1 FROM video_segments vs WHERE vs.image_id = i.id AND vs.segment_type = 'material')
-                )""")
-        elif location == 'videos':
-            # Videos tab shows only video files (exclude Live Photos under 5 seconds)
-            conditions.append("(lower(i.current_path) LIKE '%.mov' OR lower(i.current_path) LIKE '%.mp4' OR lower(i.current_path) LIKE '%.m4v')")
-            conditions.append("(i.duration IS NULL OR i.duration >= 5)")
-        elif location == 'interior':
-            conditions.append("i.interior_exterior = 'interior'")
-            if room:
-                # Use junction table to find images with this room
-                join_clause = "JOIN image_rooms ir ON i.id = ir.image_id"
-                conditions.append("ir.room = ?")
-                params.append(room)
-
     if phase:
         conditions.append("i.construction_phase = ?")
         params.append(phase)
@@ -189,15 +138,14 @@ def get_images():
         conditions.append("strftime('%Y-%m', i.photo_taken_at) = ?")
         params.append(month)
 
-    # Text search across filename, notes, linked material names, video transcripts, rooms, and view angles
+    # Text search across filename, notes, linked material names, video transcripts, and locations
     if search:
         search_pattern = f'%{search}%'
-        # Search in filename, description, material_notes, linked material names, video transcripts, rooms, view angles
         extra_joins.append("LEFT JOIN image_materials im_search ON i.id = im_search.image_id")
         extra_joins.append("LEFT JOIN materials m_search ON im_search.material_id = m_search.id")
         extra_joins.append("LEFT JOIN video_transcriptions vt_search ON i.id = vt_search.image_id")
-        extra_joins.append("LEFT JOIN image_rooms ir_search ON i.id = ir_search.image_id")
-        extra_joins.append("LEFT JOIN image_view_angles iva_search ON i.id = iva_search.image_id")
+        extra_joins.append("LEFT JOIN image_locations il_search ON i.id = il_search.image_id")
+        extra_joins.append("LEFT JOIN locations l_search ON il_search.location_id = l_search.id")
         conditions.append("""(
             i.current_path LIKE ? OR
             i.description LIKE ? OR
@@ -206,30 +154,19 @@ def get_images():
             m_search.manufacturer LIKE ? OR
             vt_search.transcription LIKE ? OR
             vt_search.summary LIKE ? OR
-            ir_search.room LIKE ? OR
-            iva_search.view_angle LIKE ?
+            l_search.name LIKE ? OR
+            l_search.full_path LIKE ?
         )""")
         params.extend([search_pattern] * 9)
-
-    # Filter for images linked to a specific material category
-    if has_material_category:
-        conditions.append("""EXISTS (
-            SELECT 1 FROM image_materials im_mat
-            JOIN materials m_mat ON im_mat.material_id = m_mat.id
-            WHERE im_mat.image_id = i.id AND m_mat.category = ?
-        )""")
-        params.append(has_material_category)
 
     # Filter by specific material ID
     if material_id:
         conditions.append("EXISTS (SELECT 1 FROM image_materials im WHERE im.image_id = i.id AND im.material_id = ?)")
         params.append(material_id)
 
-    # Filter by location_id (new hierarchical location system)
-    location_id_param = request.args.get('location_id')
-    if location_id_param:
+    # Filter by location_id (hierarchical location system)
+    if location_id:
         # Get all descendant location IDs using recursive query
-        # This gets the selected location plus all its descendants at any depth
         cursor.execute('''
             WITH RECURSIVE descendants AS (
                 SELECT id FROM locations WHERE id = ?
@@ -238,7 +175,7 @@ def get_images():
                 JOIN descendants d ON l.parent_id = d.id
             )
             SELECT id FROM descendants
-        ''', (location_id_param,))
+        ''', (location_id,))
         location_ids = [row['id'] for row in cursor.fetchall()]
 
         if location_ids:
@@ -246,16 +183,13 @@ def get_images():
             conditions.append(f"EXISTS (SELECT 1 FROM image_locations il WHERE il.image_id = i.id AND il.location_id IN ({placeholders}))")
             params.extend(location_ids)
 
-    # Combine all joins
-    all_joins = join_clause
-    if extra_joins:
-        all_joins = join_clause + " " + " ".join(extra_joins) if join_clause else " ".join(extra_joins)
-
+    # Build query
+    joins = " ".join(extra_joins) if extra_joins else ""
     where_clause = " AND ".join(conditions) if conditions else "1=1"
     query = f'''
-        SELECT DISTINCT i.id, i.current_path, i.interior_exterior, i.construction_phase, i.hidden, i.description, i.material_notes, i.image_direction, i.duration, i.photo_taken_at, i.favorite
+        SELECT DISTINCT i.id, i.current_path, i.construction_phase, i.hidden, i.description, i.material_notes, i.image_direction, i.duration, i.photo_taken_at, i.favorite
         FROM images i
-        {all_joins}
+        {joins}
         WHERE {where_clause}
         ORDER BY i.photo_taken_at, i.current_path
     '''
@@ -264,12 +198,11 @@ def get_images():
     images = []
     for row in cursor.fetchall():
         filename = os.path.basename(row['current_path'])
-        # Get all rooms for this image from junction table
-        cursor.execute('SELECT room FROM image_rooms WHERE image_id = ?', (row['id'],))
-        rooms = [r['room'] for r in cursor.fetchall()]
-        # Get all view angles for this image from junction table
-        cursor.execute('SELECT view_angle FROM image_view_angles WHERE image_id = ?', (row['id'],))
-        view_angles = [r['view_angle'] for r in cursor.fetchall()]
+        # Get locations for this image
+        cursor.execute('''SELECT l.name FROM locations l
+                          JOIN image_locations il ON l.id = il.location_id
+                          WHERE il.image_id = ?''', (row['id'],))
+        locations = [r['name'] for r in cursor.fetchall()]
         # Get all material categories for this image
         cursor.execute('''SELECT DISTINCT m.category FROM materials m
                           JOIN image_materials im ON m.id = im.material_id
@@ -282,10 +215,8 @@ def get_images():
         images.append({
             'id': row['id'],
             'filename': filename,
-            'rooms': rooms,  # Array of all rooms
-            'interior_exterior': row['interior_exterior'],
-            'view_angles': view_angles,  # Array of all view angles
-            'material_categories': material_categories,  # Array of material categories
+            'locations': locations,
+            'material_categories': material_categories,
             'construction_phase': row['construction_phase'],
             'hidden': row['hidden'],
             'favorite': row['favorite'],
@@ -518,24 +449,6 @@ def get_months():
     return jsonify({'months': months})
 
 
-@app.route('/api/date_range')
-def get_date_range():
-    """Get min and max dates for photos."""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT MIN(date(photo_taken_at)) as min_date, MAX(date(photo_taken_at)) as max_date
-        FROM images
-        WHERE photo_taken_at IS NOT NULL
-    ''')
-    row = cursor.fetchone()
-    conn.close()
-    return jsonify({
-        'min_date': row['min_date'],
-        'max_date': row['max_date']
-    })
-
-
 @app.route('/api/images/<int:image_id>/phase', methods=['POST'])
 def update_phase(image_id):
     """Update construction phase for an image."""
@@ -555,15 +468,14 @@ def update_phase(image_id):
 
 @app.route('/api/images/bulk', methods=['POST'])
 def bulk_update():
-    """Bulk update category, phase, locations, materials, and/or hidden for multiple images."""
+    """Bulk update phase, locations, materials, and/or hidden for multiple images."""
     if err := check_read_only(): return err
     data = request.get_json()
     image_ids = data.get('ids', [])
-    new_category = data.get('category')  # interior or exterior
     new_phase = data.get('phase')
-    new_location_ids = data.get('location_ids', [])  # Support adding multiple locations
-    new_material_ids = data.get('material_ids', [])  # Support adding multiple materials
-    set_hidden = data.get('hidden')  # True/False or None
+    new_location_ids = data.get('location_ids', [])
+    new_material_ids = data.get('material_ids', [])
+    set_hidden = data.get('hidden')
 
     if not image_ids:
         return jsonify({'error': 'No images selected'}), 400
@@ -573,8 +485,6 @@ def bulk_update():
 
     updated = 0
     for image_id in image_ids:
-        if new_category:
-            cursor.execute('UPDATE images SET interior_exterior = ? WHERE id = ?', (new_category, image_id))
         if new_phase:
             cursor.execute('UPDATE images SET construction_phase = ? WHERE id = ?', (new_phase, image_id))
         if new_location_ids:
@@ -598,36 +508,6 @@ def bulk_update():
     return jsonify({'success': True, 'updated': updated})
 
 
-
-
-@app.route('/api/material_categories')
-def get_material_categories():
-    """Get list of material categories with image counts (across all images with linked materials)."""
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Get categories from materials table that have associated images
-    cursor.execute('''
-        SELECT m.category, COUNT(DISTINCT im.image_id) as count
-        FROM materials m
-        JOIN image_materials im ON m.id = im.material_id
-        GROUP BY m.category
-        ORDER BY m.category
-    ''')
-    categories = [{'name': row['category'], 'count': row['count']} for row in cursor.fetchall()]
-
-    conn.close()
-    return jsonify({'categories': categories})
-
-
-@app.route('/api/all_material_categories')
-def get_all_material_categories():
-    """Get list of all material category names from the database."""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT DISTINCT category FROM materials WHERE category IS NOT NULL ORDER BY CASE WHEN category = \'labels\' THEN 0 ELSE 1 END, category')
-    categories = [row['category'] for row in cursor.fetchall()]
-    return jsonify({'categories': categories})
 
 
 @app.route('/api/all_materials')
@@ -696,59 +576,6 @@ def update_image_materials(image_id):
     conn.close()
 
     return jsonify({'success': True, 'material_ids': material_ids})
-
-
-@app.route('/api/materials/<int:material_id>')
-def get_material(material_id):
-    """Get details for a single material."""
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        SELECT m.id, m.category, m.name, m.manufacturer, m.model, m.color,
-               m.specs, m.location, m.purchase_info, m.notes, m.url
-        FROM materials m
-        WHERE m.id = ?
-    ''', (material_id,))
-    row = cursor.fetchone()
-
-    if not row:
-        conn.close()
-        return jsonify({'error': 'Material not found'}), 404
-
-    # Count linked images
-    cursor.execute('SELECT COUNT(*) as count FROM image_materials WHERE material_id = ?', (material_id,))
-    image_count = cursor.fetchone()['count']
-
-    material = {
-        'id': row['id'],
-        'category': row['category'],
-        'name': row['name'],
-        'manufacturer': row['manufacturer'],
-        'model': row['model'],
-        'color': row['color'],
-        'location': row['location'],
-        'notes': row['notes'],
-        'url': row['url'],
-        'image_count': image_count
-    }
-    # Parse specs JSON if present
-    if row['specs']:
-        try:
-            import json
-            material['specs'] = json.loads(row['specs'])
-        except:
-            material['specs'] = row['specs']
-    # Parse purchase_info JSON if present
-    if row['purchase_info']:
-        try:
-            import json
-            material['purchase_info'] = json.loads(row['purchase_info'])
-        except:
-            material['purchase_info'] = row['purchase_info']
-
-    conn.close()
-    return jsonify({'material': material})
 
 
 @app.route('/api/images/<int:image_id>/material_details')

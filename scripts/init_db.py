@@ -46,7 +46,6 @@ CREATE TABLE IF NOT EXISTS images (
     -- Classification
     description TEXT,
     construction_phase TEXT,
-    interior_exterior TEXT,
     material_notes TEXT,
 
     -- Video metadata

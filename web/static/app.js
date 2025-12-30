@@ -20,14 +20,11 @@ function closeFiltersOnMobile() {
 }
 
 let allPhases = [];
-let allMaterialCategories = [];
 let allMaterials = {};  // Materials grouped by category
 let allLocations = [];  // Hierarchical location tree
-let currentMaterialCategory = null;
 let currentMaterialId = null;
 let currentMaterialName = null;
-let currentLocation = 'interior';
-let currentLocationId = null;  // New location system
+let currentLocationId = null;
 let currentLocationName = 'All Locations';
 let selectedIds = new Set();
 let searchTimeout = null;
@@ -93,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     checkReadOnlyStatus();
-    loadAllMaterialCategories();
     loadAllMaterials();
     loadLocations();  // Load hierarchical locations for filter
     loadConstructionPhases();
@@ -116,16 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Click outside dropdowns to close them
     document.addEventListener('click', (e) => {
-        const roomsDropdown = document.getElementById('roomsDropdown');
         const materialsDropdown = document.getElementById('materialsDropdown');
-
-        // Check if click is outside the rooms dropdown and its button
-        if (roomsDropdown && roomsDropdown.classList.contains('active')) {
-            const roomsContainer = roomsDropdown.closest('.multiselect-container');
-            if (!roomsContainer || !roomsContainer.contains(e.target)) {
-                roomsDropdown.classList.remove('active');
-            }
-        }
 
         // Check if click is outside the materials dropdown and its button
         if (materialsDropdown && materialsDropdown.classList.contains('active')) {
@@ -144,25 +131,6 @@ function formatLabel(name) {
     return name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// Load all material category names for checkboxes
-async function loadAllMaterialCategories() {
-    try {
-        const response = await fetch('/api/all_material_categories');
-        const data = await response.json();
-        allMaterialCategories = data.categories;
-
-        // Generate material category checkboxes in modal (if element exists)
-        const container = document.getElementById('materialCategoryCheckboxes');
-        if (container) {
-            container.innerHTML = allMaterialCategories.map(cat =>
-                `<label><input type="checkbox" value="${cat}" onchange="updateMaterialCategories()"> ${cat.replace(/-/g, ' ')}</label>`
-            ).join('');
-        }
-
-    } catch (error) {
-        console.error('Error loading material categories:', error);
-    }
-}
 
 // Populate the materials filter dropdown with specific materials
 function populateMaterialsFilterDropdown() {
@@ -299,35 +267,13 @@ function selectLocation(locationId, displayName) {
     }
 
     // Update header
-    document.getElementById('currentRoom').textContent = displayName.includes('/') ? displayName.split('/').pop() : displayName;
+    document.getElementById('currentLocationHeader').textContent = displayName.includes('/') ? displayName.split('/').pop() : displayName;
 
     // Close dropdown
     document.getElementById('locationFilterDropdown').classList.remove('active');
 
     // Apply filters
     applyFilters();
-}
-
-// Toggle bulk category dropdown
-function toggleBulkCategoryDropdown() {
-    const dropdown = document.getElementById('bulkCategoryDropdown');
-    const isOpening = !dropdown.classList.contains('active');
-
-    // Close other dropdowns
-    document.getElementById('bulkLocationsDropdown')?.classList.remove('active');
-    document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
-    document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
-
-    // Pre-select based on current view
-    if (isOpening) {
-        const currentLocation = new URLSearchParams(window.location.search).get('location') || '';
-        const presetValue = currentLocation === 'exterior' ? 'exterior' : 'interior';
-        document.querySelectorAll('#bulkCategoryDropdown input[type="radio"]').forEach(radio => {
-            radio.checked = (radio.value === presetValue);
-        });
-    }
-
-    dropdown.classList.toggle('active');
 }
 
 // Toggle bulk phase dropdown
@@ -338,7 +284,6 @@ function toggleBulkPhaseDropdown() {
     // Close other dropdowns
     document.getElementById('bulkLocationsDropdown')?.classList.remove('active');
     document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
-    document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
 
     // Populate phases if opening
     if (isOpening) {
@@ -360,7 +305,6 @@ function toggleBulkMaterialsDropdown() {
 
     // Close other dropdowns
     document.getElementById('bulkLocationsDropdown')?.classList.remove('active');
-    document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
     document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
 
     // Populate materials if opening
@@ -371,8 +315,7 @@ function toggleBulkMaterialsDropdown() {
         for (const category of sortedCategories) {
             html += `<div class="multiselect-category">${category}</div>`;
             for (const mat of allMaterials[category]) {
-                const displayName = mat.manufacturer ? `${mat.name} (${mat.manufacturer})` : mat.name;
-                html += `<label><input type="checkbox" value="${mat.id}"> <span>${displayName}</span></label>`;
+                html += `<label><input type="checkbox" value="${mat.id}"> <span>${mat.name}</span></label>`;
             }
         }
         options.innerHTML = html;
@@ -393,8 +336,7 @@ document.addEventListener('click', function(e) {
     if (!e.target.closest('.multiselect-container')) {
         document.getElementById('bulkLocationsDropdown')?.classList.remove('active');
         document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
-        document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
-        document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
+            document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
     }
 });
 
@@ -448,8 +390,7 @@ function applyFilters() {
     const videosOnly = document.getElementById('videosOnly').checked;
     const favoritesOnly = document.getElementById('favoritesOnly')?.checked || false;
 
-    // Use new location system
-    loadImages(null, null, phase, month, null, null, showHidden, search, '', videosOnly, currentMaterialId, currentLocationId, favoritesOnly);
+    loadImages(phase, month, showHidden, search, videosOnly, currentMaterialId, currentLocationId, favoritesOnly);
     closeFiltersOnMobile();
 }
 
@@ -477,7 +418,7 @@ function clearFilters() {
     if (locationFilterBtn) {
         locationFilterBtn.textContent = 'All Locations';
     }
-    document.getElementById('currentRoom').textContent = 'All Locations';
+    document.getElementById('currentLocationHeader').textContent = 'All Locations';
     applyFilters();
 }
 
@@ -491,7 +432,7 @@ function updateFilterVisibility() {
 }
 
 // Load images with filters
-async function loadImages(room = null, location = 'interior', phase = '', month = '', viewAngle = null, materialCategory = null, showHidden = false, search = '', hasMaterialCategory = '', videosOnly = false, materialId = null, locationId = null, favoritesOnly = false) {
+async function loadImages(phase = '', month = '', showHidden = false, search = '', videosOnly = false, materialId = null, locationId = null, favoritesOnly = false) {
     const grid = document.getElementById('imageGrid');
     grid.innerHTML = '<div class="loading">Loading images...</div>';
 
@@ -506,21 +447,11 @@ async function loadImages(room = null, location = 'interior', phase = '', month 
         let url = '/api/images?';
         const params = [];
 
-        // Use new location_id if provided, otherwise fall back to old system
-        if (locationId) {
-            params.push(`location_id=${locationId}`);
-        } else if (location) {
-            params.push(`location=${location}`);
-            if (room) params.push(`room=${encodeURIComponent(room)}`);
-            if (viewAngle) params.push(`view_angle=${encodeURIComponent(viewAngle)}`);
-        }
-
-        if (materialCategory) params.push(`material_category=${encodeURIComponent(materialCategory)}`);
+        if (locationId) params.push(`location_id=${locationId}`);
         if (phase) params.push(`phase=${encodeURIComponent(phase)}`);
         if (month) params.push(`month=${encodeURIComponent(month)}`);
         if (showHidden) params.push('show_hidden=true');
         if (search) params.push(`search=${encodeURIComponent(search)}`);
-        if (hasMaterialCategory) params.push(`has_material_category=${encodeURIComponent(hasMaterialCategory)}`);
         if (videosOnly) params.push('videos_only=true');
         if (materialId) params.push(`material_id=${materialId}`);
         if (favoritesOnly) params.push('favorites_only=true');
@@ -539,21 +470,9 @@ async function loadImages(room = null, location = 'interior', phase = '', month 
         }
 
         grid.innerHTML = currentImages.map((img, index) => {
-            // Display rooms or view angles depending on category
-            let displayLabel = '';
-            if (currentLocation === 'videos') {
-                // In videos view, show interior/exterior
-                displayLabel = formatLabel(img.interior_exterior) || '';
-            } else if (img.interior_exterior === 'interior') {
-                const rooms = img.rooms || [];
-                displayLabel = rooms.length > 0 ? rooms.map(formatLabel).join(', ') : '';
-            } else if (img.interior_exterior === 'exterior') {
-                const viewAngles = img.view_angles || [];
-                displayLabel = viewAngles.length > 0 ? viewAngles.map(formatLabel).join(', ') : '';
-            } else if (img.interior_exterior === 'materials') {
-                const materialCats = img.material_categories && img.material_categories.length > 0 ? img.material_categories : [];
-                displayLabel = materialCats.length > 0 ? materialCats.map(formatLabel).join(', ') : '';
-            }
+            // Display locations
+            const locations = img.locations || [];
+            const displayLabel = locations.length > 0 ? locations.map(formatLabel).join(', ') : '';
             // Format duration for videos
             let durationLabel = '';
             if (img.is_video && img.duration) {
@@ -571,7 +490,7 @@ async function loadImages(room = null, location = 'interior', phase = '', month 
                 </div>
                 <div class="image-info" onclick="openModal(${index})">
                     <div class="image-filename">${displayName(img.filename)}</div>
-                    <div class="image-room">${displayLabel}</div>
+                    <div class="image-location">${displayLabel}</div>
                     ${img.construction_phase ? `<div class="image-phase">${img.construction_phase}</div>` : ''}
                 </div>
             </div>
@@ -760,7 +679,6 @@ async function applyBulkUpdate() {
             clearSelection();
             applyFilters();
             loadLocations();
-            loadMaterialCategories();
             loadConstructionPhases();
         } else {
             console.error('Error updating images');
@@ -891,9 +809,6 @@ function openModal(index) {
     // Show construction phase
     document.getElementById('modalPhase').textContent = img.construction_phase ? formatLabel(img.construction_phase) : '';
 
-    // Update controls (now a no-op, kept for backwards compatibility)
-    updateModalControls(img.interior_exterior);
-
     // Set notes - combine description and material_notes
     const notes = img.material_notes || img.description || '';
     document.getElementById('imageNotes').value = notes;
@@ -985,15 +900,13 @@ async function loadMaterialDetails(imageId) {
 // View all images for a specific material
 function viewMaterialImages(materialId, materialName) {
     // Set filters BEFORE closeModal (which calls applyFilters)
-    currentMaterialCategory = null;
     currentMaterialId = materialId;
     currentMaterialName = materialName;
-    currentLocation = 'materials';
     currentLocationId = null;
     currentLocationName = 'All Locations';
 
     // Update header
-    document.getElementById('currentRoom').textContent = materialName;
+    document.getElementById('currentLocationHeader').textContent = materialName;
 
     // Reset location filter button
     const locationFilterBtn = document.getElementById('locationFilterBtn');
@@ -1285,13 +1198,6 @@ function updateNavButtons() {
     prevBtn.disabled = currentIndex <= 0;
     nextBtn.disabled = currentIndex >= currentImages.length - 1;
 }
-
-// Update modal controls visibility based on category
-// Now a no-op since we have a unified locations dropdown
-function updateModalControls(category) {
-    // Locations dropdown handles both interior/exterior
-}
-
 // Close modal
 function closeModal() {
     // Pause any playing video
@@ -1402,51 +1308,6 @@ async function updateNotes() {
     }
 }
 
-// Update material categories (for materials images) - checkboxes
-async function updateMaterialCategories() {
-    const img = currentImages[currentIndex];
-    const status = document.getElementById('saveStatus');
-
-    // Get all checked material categories
-    const selectedCategories = [];
-    document.querySelectorAll('#materialCategoryCheckboxes input[type="checkbox"]:checked').forEach(cb => {
-        selectedCategories.push(cb.value);
-    });
-
-    status.textContent = 'Saving...';
-
-    try {
-        const response = await fetch(`/api/images/${img.id}/materials`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ categories: selectedCategories })
-        });
-
-        if (response.ok) {
-            status.textContent = 'Saved!';
-            img.material_categories = selectedCategories;
-
-            // Update the card in the grid
-            const cards = document.querySelectorAll('.image-card');
-            if (cards[currentIndex]) {
-                const catDisplay = selectedCategories.length > 0 ? selectedCategories.join(', ') : 'unclassified';
-                cards[currentIndex].querySelector('.image-room').textContent = catDisplay;
-            }
-
-            // Refresh material category counts
-            loadMaterialCategories();
-
-            setTimeout(() => { status.textContent = ''; }, 2000);
-        } else {
-            status.textContent = 'Error saving';
-        }
-    } catch (error) {
-        console.error('Error updating material categories:', error);
-        status.textContent = 'Error saving';
-    }
-}
-
-
 // Load all materials grouped by category
 async function loadAllMaterials() {
     try {
@@ -1487,8 +1348,6 @@ function toggleDropdown(dropdownId) {
                 searchInput.value = '';
                 setTimeout(() => searchInput.focus(), 10);
             }
-        } else if (dropdownId === 'categoryDropdown') {
-            populateCategoryDropdown();
         } else if (dropdownId === 'phaseDropdown') {
             populatePhaseDropdown();
         }
@@ -1522,10 +1381,9 @@ async function populateMaterialsDropdown() {
 
         for (const mat of materials) {
             const checked = linkedMaterialIds.has(mat.id) ? 'checked' : '';
-            const displayName = mat.manufacturer ? `${mat.name} (${mat.manufacturer})` : mat.name;
             html += `<label>
                 <input type="checkbox" value="${mat.id}" ${checked}>
-                <span>${displayName}</span>
+                <span>${mat.name}</span>
             </label>`;
         }
     }
@@ -1592,7 +1450,6 @@ async function saveMaterialsFromDropdown() {
 
             document.getElementById('materialsDropdown').classList.remove('active');
             loadMaterialDetails(img.id);
-            loadMaterialCategories();
             setTimeout(() => { status.textContent = ''; }, 2000);
         } else {
             status.textContent = 'Error saving';
@@ -1785,7 +1642,6 @@ function toggleBulkLocationsDropdown() {
 
     // Close other dropdowns
     document.getElementById('bulkMaterialsDropdown')?.classList.remove('active');
-    document.getElementById('bulkCategoryDropdown')?.classList.remove('active');
     document.getElementById('bulkPhaseDropdown')?.classList.remove('active');
 
     if (isOpening) {
