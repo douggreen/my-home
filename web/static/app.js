@@ -19,14 +19,10 @@ function closeFiltersOnMobile() {
     }
 }
 
-let allRooms = [];
 let allPhases = [];
-let allViewAngles = [];
 let allMaterialCategories = [];
 let allMaterials = {};  // Materials grouped by category
 let allLocations = [];  // Hierarchical location tree
-let currentRoom = null;
-let currentViewAngle = null;
 let currentMaterialCategory = null;
 let currentMaterialId = null;
 let currentMaterialName = null;
@@ -97,10 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     checkReadOnlyStatus();
-    loadRooms();
-    loadAllRoomNames();
-    loadViewAngles();
-    loadAllViewAngles();
     loadAllMaterialCategories();
     loadAllMaterials();
     loadLocations();  // Load hierarchical locations for filter
@@ -144,52 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Accordion behavior for sidebar details + load "All" view when clicking header
-    document.querySelectorAll('.sidebar details').forEach(details => {
-        details.addEventListener('toggle', () => {
-            if (details.open) {
-                document.querySelectorAll('.sidebar details').forEach(other => {
-                    if (other !== details) other.open = false;
-                });
-            }
-        });
-
-        // Click on summary loads the "All" view for that section
-        const summary = details.querySelector('summary');
-        if (summary) {
-            summary.addEventListener('click', () => {
-                const text = summary.textContent.trim().toLowerCase();
-                if (text.includes('interior')) {
-                    currentRoom = null;
-                    currentViewAngle = null;
-                    currentLocation = 'interior';
-                    document.getElementById('currentRoom').textContent = 'All Interior';
-                    setActiveRoom(null);
-                    toggleBulkControls('interior');
-                    applyFilters();
-                } else if (text.includes('exterior')) {
-                    currentRoom = null;
-                    currentViewAngle = null;
-                    currentLocation = 'exterior';
-                    document.getElementById('currentRoom').textContent = 'All Exterior';
-                    setActiveRoom(null, 'exterior');
-                    toggleBulkControls('exterior');
-                    applyFilters();
-                } else if (text.includes('materials')) {
-                    currentRoom = null;
-                    currentViewAngle = null;
-                    currentMaterialCategory = null;
-                    currentLocation = 'materials';
-                    document.getElementById('currentRoom').textContent = 'All Materials';
-                    setActiveRoom(null, 'materials');
-                    toggleBulkControls('materials');
-                    applyFilters();
-                }
-            });
-        }
-    });
-
-    // Exterior link - will be set up by loadViewAngles
 });
 
 // Format kebab-case names to human readable (e.g., "primary-bathroom" -> "Primary Bathroom")
@@ -197,242 +143,6 @@ function formatLabel(name) {
     if (!name) return '';
     return name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
-
-// Load room list with counts
-async function loadRooms() {
-    try {
-        const response = await fetch('/api/rooms');
-        const data = await response.json();
-
-        const roomList = document.getElementById('roomList');
-        if (!roomList) return;  // Sidebar removed, skip populating
-        roomList.innerHTML = '';
-
-        // Add "All Interior" option
-        const allItem = document.createElement('li');
-        allItem.className = 'room-item active';
-        allItem.innerHTML = `
-            <span>All Interior</span>
-            <span class="room-count">${data.total_interior}</span>
-        `;
-        allItem.addEventListener('click', () => {
-            currentRoom = null;
-            currentViewAngle = null;
-            currentLocation = 'interior';
-            document.getElementById('currentRoom').textContent = 'All Interior';
-            setActiveRoom(null);
-            toggleBulkControls('interior');
-            applyFilters();
-        });
-        roomList.appendChild(allItem);
-
-        // Define room hierarchies
-        const roomGroups = [
-            {
-                name: 'Basement',
-                parentRoom: 'basement',
-                children: ['basement-suite', 'stairs'],
-                stripPrefix: 'basement-'  // Show "Suite" instead of "Basement Suite"
-            },
-            {
-                name: 'Great Room',
-                parentRoom: 'great-room',
-                children: ['dining-room', 'entry', 'kitchen', 'family-room'],
-                stripPrefix: null
-            },
-            {
-                name: 'Primary Suite',
-                parentRoom: null,  // No parent room to filter on (just a label)
-                children: ['primary-bathroom', 'primary-bedroom', 'primary-closet'],
-                stripPrefix: 'primary-'  // Show "Bathroom" instead of "Primary Bathroom"
-            },
-            {
-                name: 'Guest',
-                parentRoom: null,  // No parent room to filter on (just a label)
-                children: ['guest-bathroom', 'guest-bedroom', 'guest-hallway'],
-                stripPrefix: 'guest-'
-            },
-            {
-                name: 'Outdoor Living',
-                parentRoom: null,  // Just a label
-                children: ['front-porch', 'screened-patio'],
-                stripPrefix: null
-            }
-        ];
-
-        // Collect all grouped room names
-        const groupedRoomNames = new Set();
-        roomGroups.forEach(g => {
-            if (g.parentRoom) groupedRoomNames.add(g.parentRoom);
-            g.children.forEach(c => groupedRoomNames.add(c));
-        });
-
-        // Separate rooms by group
-        const roomsByGroup = {};
-        const parentRoomData = {};
-        const otherRooms = [];
-
-        data.rooms.forEach(room => {
-            let found = false;
-            for (const group of roomGroups) {
-                if (room.name === group.parentRoom) {
-                    parentRoomData[group.name] = room;
-                    found = true;
-                    break;
-                } else if (group.children.includes(room.name)) {
-                    if (!roomsByGroup[group.name]) roomsByGroup[group.name] = [];
-                    roomsByGroup[group.name].push(room);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                otherRooms.push(room);
-            }
-        });
-
-        // Helper to create room item
-        function createRoomItem(room, isChild = false, displayName = null) {
-            const li = document.createElement('li');
-            li.className = 'room-item' + (isChild ? ' room-child' : '');
-            li.dataset.room = room.name;
-            li.innerHTML = `
-                <span>${displayName || formatLabel(room.name)}</span>
-                <span class="room-count">${room.count}</span>
-            `;
-            li.addEventListener('click', (e) => {
-                e.stopPropagation();
-                currentRoom = room.name;
-                currentViewAngle = null;
-                currentLocation = 'interior';
-                document.getElementById('currentRoom').textContent = formatLabel(room.name);
-                setActiveRoom(room.name);
-                toggleBulkControls('interior');
-                applyFilters();
-            });
-            return li;
-        }
-
-        // Helper to create room group (all non-collapsible)
-        function createRoomGroup(group) {
-            const groupRooms = roomsByGroup[group.name] || [];
-            const parentData = parentRoomData[group.name];
-
-            if (!parentData && groupRooms.length === 0) return null;
-
-            const container = document.createElement('div');
-            container.className = 'room-group-inline';
-
-            // Add header - either clickable room or just a label
-            if (parentData) {
-                // Clickable room (like Great Room)
-                container.appendChild(createRoomItem(parentData, false, group.name));
-            } else {
-                // Just a label header (like Primary Suite, Guest)
-                const label = document.createElement('div');
-                label.className = 'room-group-label';
-                label.textContent = group.name + ' *';
-                container.appendChild(label);
-            }
-
-            // Add children in indented list
-            if (groupRooms.length > 0) {
-                const childList = document.createElement('ul');
-                childList.className = 'room-list room-children';
-                groupRooms.forEach(room => {
-                    let displayName = null;
-                    if (group.stripPrefix && room.name.startsWith(group.stripPrefix)) {
-                        displayName = formatLabel(room.name.substring(group.stripPrefix.length));
-                    }
-                    childList.appendChild(createRoomItem(room, true, displayName));
-                });
-                container.appendChild(childList);
-            }
-
-            return container;
-        }
-
-        // Collect all items for sorting
-        const allItems = [];
-
-        // Add all room groups
-        roomGroups.forEach(group => {
-            const container = createRoomGroup(group);
-            if (container) {
-                // Sort by parent room name, or group name for label-only groups
-                const sortKey = group.parentRoom || group.name.toLowerCase().replace(/ /g, '-');
-                allItems.push({ sortKey: sortKey, element: container });
-            }
-        });
-
-        // Add other rooms
-        otherRooms.forEach(room => {
-            allItems.push({ sortKey: room.name, element: createRoomItem(room), isGroup: false });
-        });
-
-        // Sort alphabetically and append
-        allItems.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-        allItems.forEach(item => {
-            roomList.appendChild(item.element);
-        });
-
-        // Update exterior count
-        document.getElementById('exteriorCount').textContent = data.total_exterior;
-
-        // Update videos count
-        document.getElementById('videosCount').textContent = data.total_videos;
-
-        // Set up videos click handler
-        const videosItem = document.querySelector('[data-location="videos"]');
-        const selectVideos = () => {
-            currentRoom = null;
-            currentViewAngle = null;
-            currentMaterialCategory = null;
-            currentLocation = 'videos';
-            document.getElementById('currentRoom').textContent = 'All Videos';
-            setActiveRoom(null, 'videos');
-            toggleBulkControls('videos');
-            applyFilters();
-        };
-        if (videosItem && !videosItem.hasAttribute('data-initialized')) {
-            videosItem.setAttribute('data-initialized', 'true');
-            videosItem.addEventListener('click', selectVideos);
-
-            // Also select videos when clicking the summary
-            const videosSummary = videosItem.closest('details')?.querySelector('summary');
-            if (videosSummary) {
-                videosSummary.addEventListener('click', (e) => {
-                    // Small delay to let details toggle first
-                    setTimeout(selectVideos, 0);
-                });
-            }
-        }
-
-        // Update favorites count
-        document.getElementById('favoritesCount').textContent = data.total_favorites;
-
-        // Set up favorites click handler
-        const favoritesItem = document.querySelector('[data-location="favorites"]');
-        const selectFavorites = () => {
-            currentRoom = null;
-            currentViewAngle = null;
-            currentMaterialCategory = null;
-            currentMaterialId = null;
-            currentLocation = 'favorites';
-            document.getElementById('currentRoom').textContent = 'Favorites';
-            setActiveRoom(null, 'favorites');
-            toggleBulkControls('favorites');
-            applyFilters();
-        };
-        if (favoritesItem && !favoritesItem.hasAttribute('data-initialized')) {
-            favoritesItem.setAttribute('data-initialized', 'true');
-            favoritesItem.addEventListener('click', selectFavorites);
-        }
-    } catch (error) {
-        console.error('Error loading rooms:', error);
-    }
-}
-
 
 // Load all material category names for checkboxes
 async function loadAllMaterialCategories() {
@@ -527,17 +237,6 @@ document.addEventListener('click', function(e) {
         document.querySelectorAll('.filter-dropdown').forEach(d => d.classList.remove('active'));
     }
 });
-
-// Load all room names for checkboxes
-async function loadAllRoomNames() {
-    try {
-        const response = await fetch('/api/all_rooms');
-        const data = await response.json();
-        allRooms = data.rooms;
-    } catch (error) {
-        console.error('Error loading room names:', error);
-    }
-}
 
 // Load hierarchical locations for filter dropdown
 async function loadLocations() {
@@ -699,167 +398,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Load view angles for exterior sidebar
-async function loadViewAngles() {
-    try {
-        const response = await fetch('/api/view_angles');
-        const data = await response.json();
 
-        const viewList = document.getElementById('viewAngleList');
-        if (!viewList) return;  // Sidebar removed, skip populating
-
-        const roomsResponse = await fetch('/api/rooms');
-        const roomsData = await roomsResponse.json();
-        viewList.innerHTML = '';
-
-        // Add "All Exterior" option
-        const allItem = document.createElement('li');
-        allItem.className = 'room-item';
-        allItem.dataset.location = 'exterior';
-        allItem.innerHTML = `
-            <span>All Exterior</span>
-            <span class="room-count" id="exteriorCount">${roomsData.total_exterior}</span>
-        `;
-        allItem.addEventListener('click', () => {
-            currentRoom = null;
-            currentViewAngle = null;
-            currentLocation = 'exterior';
-            document.getElementById('currentRoom').textContent = 'All Exterior';
-            setActiveRoom(null, 'exterior');
-            toggleBulkControls('exterior');
-            applyFilters();
-        });
-        viewList.appendChild(allItem);
-
-        // Define view angle groups (similar to interior room groups)
-        const viewGroups = [
-            {
-                name: 'Garage',
-                children: ['garage-front', 'garage-back'],
-                stripPrefix: 'garage-'
-            },
-            {
-                name: 'House Exterior',
-                children: ['front', 'back', 'left', 'right', 'side-garage', 'side-guest', 'side-office', 'side-primary'],
-                stripPrefix: null  // Keep full names for clarity
-            },
-            {
-                name: 'Outdoor Living',
-                children: ['back-deck', 'front-porch'],
-                stripPrefix: null
-            },
-            {
-                name: 'Yard',
-                children: ['cul-de-sac', 'driveway', 'garage-side-yard', 'back-road', 'rear-clifton-road', 'rear-field'],
-                stripPrefix: null
-            }
-        ];
-
-        // Build lookup from view_angles data
-        const viewDataByName = {};
-        data.view_angles.forEach(angle => {
-            viewDataByName[angle.name] = angle;
-        });
-
-        // Collect all grouped view names
-        const groupedViewNames = new Set();
-        viewGroups.forEach(g => {
-            g.children.forEach(c => groupedViewNames.add(c));
-        });
-
-        // Helper to create view item
-        function createViewItem(angle, isChild = false, displayName = null) {
-            const li = document.createElement('li');
-            li.className = 'room-item' + (isChild ? ' room-child' : '');
-            li.dataset.viewAngle = angle.name;
-            li.innerHTML = `
-                <span>${displayName || formatLabel(angle.name)}</span>
-                <span class="room-count">${angle.count}</span>
-            `;
-            li.addEventListener('click', (e) => {
-                e.stopPropagation();
-                currentRoom = null;
-                currentViewAngle = angle.name;
-                currentLocation = 'exterior';
-                document.getElementById('currentRoom').textContent = formatLabel(angle.name);
-                setActiveRoom(angle.name, 'exterior');
-                toggleBulkControls('exterior');
-                applyFilters();
-            });
-            return li;
-        }
-
-        // Helper to create view group
-        function createViewGroup(group) {
-            const groupViews = group.children
-                .map(name => viewDataByName[name])
-                .filter(v => v);  // Filter out undefined
-
-            if (groupViews.length === 0) return null;
-
-            const container = document.createElement('div');
-            container.className = 'room-group-inline';
-
-            // Add label header
-            const label = document.createElement('div');
-            label.className = 'room-group-label';
-            label.textContent = group.name;
-            container.appendChild(label);
-
-            // Add children in indented list
-            const childList = document.createElement('ul');
-            childList.className = 'room-list room-children';
-            groupViews.forEach(angle => {
-                let displayName = null;
-                // For "House" group, strip "side-" prefix but keep front/back as-is
-                if (group.stripPrefix && angle.name.startsWith(group.stripPrefix)) {
-                    displayName = formatLabel(angle.name.substring(group.stripPrefix.length));
-                }
-                childList.appendChild(createViewItem(angle, true, displayName));
-            });
-            container.appendChild(childList);
-
-            return container;
-        }
-
-        // Add grouped views
-        viewGroups.forEach(group => {
-            const container = createViewGroup(group);
-            if (container) {
-                viewList.appendChild(container);
-            }
-        });
-
-        // Add ungrouped views (any not in a group)
-        data.view_angles.forEach(angle => {
-            if (!groupedViewNames.has(angle.name)) {
-                viewList.appendChild(createViewItem(angle));
-            }
-        });
-
-    } catch (error) {
-        console.error('Error loading view angles:', error);
-    }
-}
-
-// Load all view angle names for checkboxes
-async function loadAllViewAngles() {
-    try {
-        const response = await fetch('/api/all_view_angles');
-        const data = await response.json();
-        // Merge with predefined view angles that may not exist yet
-        const predefined = ['garage-side-yard'];
-        const merged = new Set([...data.view_angles, ...predefined]);
-        allViewAngles = Array.from(merged).sort();
-    } catch (error) {
-        console.error('Error loading view angles:', error);
-    }
-}
-
-// Toggle bulk controls based on location (now a no-op since we have unified locations)
-function toggleBulkControls(location) {
-    // Locations dropdown handles both interior/exterior, no need to toggle
-}
 
 // Load construction phases
 async function loadConstructionPhases() {
@@ -891,42 +430,6 @@ async function loadMonths() {
 }
 
 
-// Set active room/view in sidebar
-function setActiveRoom(name, location = 'interior') {
-    document.querySelectorAll('.room-item').forEach(item => {
-        item.classList.remove('active');
-        if (location === 'interior') {
-            if (name === null && !item.dataset.room && !item.dataset.location && !item.dataset.viewAngle && !item.dataset.materialCategory) {
-                item.classList.add('active');
-            } else if (item.dataset.room === name) {
-                item.classList.add('active');
-            }
-        } else if (location === 'exterior') {
-            if (name === null && item.dataset.location === 'exterior') {
-                item.classList.add('active');
-            } else if (item.dataset.viewAngle === name) {
-                item.classList.add('active');
-            }
-        } else if (location === 'materials') {
-            if (name === null && item.dataset.location === 'materials') {
-                item.classList.add('active');
-            } else if (item.dataset.materialCategory === name) {
-                item.classList.add('active');
-            }
-        } else if (location === 'videos') {
-            if (item.dataset.location === 'videos') {
-                item.classList.add('active');
-            }
-        } else if (location === 'favorites') {
-            if (item.dataset.location === 'favorites') {
-                item.classList.add('active');
-            }
-        }
-    });
-
-    // Close sidebar on mobile after selection
-    closeSidebarOnMobile();
-}
 
 // Debounce search input to avoid too many requests
 function debounceSearch() {
@@ -1126,8 +629,6 @@ async function toggleFavorite(event, imageId) {
             // Update the image in currentImages
             const img = currentImages.find(i => i.id === imageId);
             if (img) img.favorite = newFavorite;
-            // Update favorites count in nav
-            loadRooms();
         }
     } catch (error) {
         console.error('Error updating favorite:', error);
@@ -1291,7 +792,6 @@ async function hideSelected() {
         if (response.ok) {
             clearSelection();
             applyFilters();
-            loadRooms();
         } else {
             console.error('Error hiding images');
         }
@@ -1322,7 +822,6 @@ async function unhideSelected() {
         if (response.ok) {
             clearSelection();
             applyFilters();
-            loadRooms();
         } else {
             console.error('Error unhiding images');
         }
@@ -1407,7 +906,7 @@ function openModal(index) {
 
     // Load transcription for videos
     if (img.is_video) {
-        loadTranscription(img.id, currentRoom);
+        loadTranscription(img.id, currentLocationId);
     } else {
         document.getElementById('transcriptionPanel').style.display = 'none';
         document.getElementById('videoSegmentsPanel').style.display = 'none';
@@ -1486,18 +985,21 @@ async function loadMaterialDetails(imageId) {
 // View all images for a specific material
 function viewMaterialImages(materialId, materialName) {
     // Set filters BEFORE closeModal (which calls applyFilters)
-    currentRoom = null;
-    currentViewAngle = null;
     currentMaterialCategory = null;
     currentMaterialId = materialId;
     currentMaterialName = materialName;
     currentLocation = 'materials';
+    currentLocationId = null;
+    currentLocationName = 'All Locations';
 
     // Update header
     document.getElementById('currentRoom').textContent = materialName;
 
-    // Clear sidebar selection and highlight materials
-    setActiveRoom(null, 'materials');
+    // Reset location filter button
+    const locationFilterBtn = document.getElementById('locationFilterBtn');
+    if (locationFilterBtn) {
+        locationFilterBtn.textContent = 'All Locations';
+    }
 
     // Close modal (this calls applyFilters with the correct filter state)
     closeModal();
@@ -1676,7 +1178,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Load and display transcription and segments for a video
-async function loadTranscription(imageId, filterRoom) {
+async function loadTranscription(imageId, filterLocationId) {
     const transcriptionPanel = document.getElementById('transcriptionPanel');
     const transcriptionText = document.getElementById('transcriptionText');
     const segmentsPanel = document.getElementById('videoSegmentsPanel');
@@ -1735,8 +1237,8 @@ async function loadTranscription(imageId, filterRoom) {
                 document.getElementById('locationSegmentsPanel').style.display = 'block';
 
                 // Auto-seek to filtered location if provided
-                if (filterRoom) {
-                    const matchingSegment = locationSegments.find(s => s.segment_value === filterRoom);
+                if (filterLocationId) {
+                    const matchingSegment = locationSegments.find(s => s.location_id === filterLocationId);
                     if (matchingSegment) {
                         // Small delay to allow video to load
                         setTimeout(() => {
@@ -1859,41 +1361,6 @@ async function updatePhase() {
     }
 }
 
-// Update category (interior/exterior/materials)
-async function updateCategory() {
-    const img = currentImages[currentIndex];
-    const newCategory = document.getElementById('categorySelect').value;
-    const status = document.getElementById('saveStatus');
-
-    status.textContent = 'Saving...';
-
-    // Update controls visibility immediately
-    updateModalControls(newCategory);
-
-    try {
-        const response = await fetch(`/api/images/${img.id}/category`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category: newCategory })
-        });
-
-        if (response.ok) {
-            status.textContent = 'Saved!';
-            img.interior_exterior = newCategory;
-
-            // Refresh counts
-            loadRooms();
-            loadViewAngles();
-
-            setTimeout(() => { status.textContent = ''; }, 2000);
-        } else {
-            status.textContent = 'Error saving';
-        }
-    } catch (error) {
-        console.error('Error updating category:', error);
-        status.textContent = 'Error saving';
-    }
-}
 
 // Change image size
 function changeImageSize() {
@@ -1979,49 +1446,6 @@ async function updateMaterialCategories() {
     }
 }
 
-// Update view angles (for exterior images) - checkboxes
-async function updateViewAngles() {
-    const img = currentImages[currentIndex];
-    const status = document.getElementById('saveStatus');
-
-    // Get all checked view angles
-    const selectedViewAngles = [];
-    document.querySelectorAll('#viewAngleCheckboxes input[type="checkbox"]:checked').forEach(cb => {
-        selectedViewAngles.push(cb.value);
-    });
-
-    status.textContent = 'Saving...';
-
-    try {
-        const response = await fetch(`/api/images/${img.id}/view_angle`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ view_angles: selectedViewAngles })
-        });
-
-        if (response.ok) {
-            status.textContent = 'Saved!';
-            img.view_angles = selectedViewAngles;
-
-            // Update the card in the grid
-            const cards = document.querySelectorAll('.image-card');
-            if (cards[currentIndex]) {
-                const viewDisplay = selectedViewAngles.length > 0 ? selectedViewAngles.join(', ') : 'unclassified';
-                cards[currentIndex].querySelector('.image-room').textContent = viewDisplay;
-            }
-
-            // Refresh view angle counts
-            loadViewAngles();
-
-            setTimeout(() => { status.textContent = ''; }, 2000);
-        } else {
-            status.textContent = 'Error saving';
-        }
-    } catch (error) {
-        console.error('Error updating view angles:', error);
-        status.textContent = 'Error saving';
-    }
-}
 
 // Load all materials grouped by category
 async function loadAllMaterials() {
@@ -2072,23 +1496,6 @@ function toggleDropdown(dropdownId) {
     }
 }
 
-// Populate rooms dropdown
-function populateRoomsDropdown() {
-    const img = currentImages[currentIndex];
-    const container = document.getElementById('roomsOptions');
-    const linkedRooms = new Set(img.rooms || []);
-
-    let html = '';
-    for (const room of allRooms) {
-        const checked = linkedRooms.has(room) ? 'checked' : '';
-        const displayName = room.replace(/-/g, ' ');
-        html += `<label>
-            <input type="checkbox" value="${room}" ${checked}>
-            <span>${displayName}</span>
-        </label>`;
-    }
-    container.innerHTML = html;
-}
 
 // Populate materials dropdown
 async function populateMaterialsDropdown() {
@@ -2159,48 +1566,6 @@ function filterMaterialsList(searchText, containerId) {
     });
 }
 
-// Save rooms from dropdown
-async function saveRoomsFromDropdown() {
-    if (!canEdit()) return;
-    const img = currentImages[currentIndex];
-    const status = document.getElementById('saveStatus');
-
-    const selectedRooms = [];
-    document.querySelectorAll('#roomsOptions input[type="checkbox"]:checked').forEach(cb => {
-        selectedRooms.push(cb.value);
-    });
-
-    status.textContent = 'Saving...';
-
-    try {
-        const response = await fetch(`/api/images/${img.id}/room`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rooms: selectedRooms })
-        });
-
-        if (response.ok) {
-            status.textContent = 'Saved!';
-
-            img.rooms = selectedRooms;
-
-            const cards = document.querySelectorAll('.image-card');
-            if (cards[currentIndex]) {
-                const roomDisplay = selectedRooms.length > 0 ? selectedRooms.join(', ').replace(/-/g, ' ') : 'unclassified';
-                cards[currentIndex].querySelector('.image-room').textContent = roomDisplay;
-            }
-
-            document.getElementById('roomsDropdown').classList.remove('active');
-            loadRooms();
-            setTimeout(() => { status.textContent = ''; }, 2000);
-        } else {
-            status.textContent = 'Error saving';
-        }
-    } catch (error) {
-        console.error('Error saving rooms:', error);
-        status.textContent = 'Error saving';
-    }
-}
 
 // Save materials from dropdown
 async function saveMaterialsFromDropdown() {
@@ -2238,56 +1603,6 @@ async function saveMaterialsFromDropdown() {
     }
 }
 
-// Populate category dropdown
-function populateCategoryDropdown() {
-    const img = currentImages[currentIndex];
-    const currentCategory = img.interior_exterior || '';
-
-    document.querySelectorAll('#categoryOptions input[type="radio"]').forEach(radio => {
-        radio.checked = (radio.value === currentCategory);
-    });
-}
-
-// Save category from dropdown
-async function saveCategoryFromDropdown() {
-    if (!canEdit()) return;
-    const img = currentImages[currentIndex];
-    const status = document.getElementById('saveStatus');
-
-    const selectedRadio = document.querySelector('#categoryOptions input[type="radio"]:checked');
-    if (!selectedRadio) return;
-
-    const newCategory = selectedRadio.value;
-    status.textContent = 'Saving...';
-
-    // Update controls visibility immediately
-    updateModalControls(newCategory);
-
-    try {
-        const response = await fetch(`/api/images/${img.id}/category`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category: newCategory })
-        });
-
-        if (response.ok) {
-            status.textContent = 'Saved!';
-            img.interior_exterior = newCategory;
-
-            document.getElementById('categoryDropdown').classList.remove('active');
-            // Refresh counts
-            loadRooms();
-            loadViewAngles();
-
-            setTimeout(() => { status.textContent = ''; }, 2000);
-        } else {
-            status.textContent = 'Error saving';
-        }
-    } catch (error) {
-        console.error('Error saving category:', error);
-        status.textContent = 'Error saving';
-    }
-}
 
 // Populate phase dropdown
 function populatePhaseDropdown() {

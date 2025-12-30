@@ -65,23 +65,6 @@ CREATE TABLE IF NOT EXISTS images (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Rooms linked to images
-CREATE TABLE IF NOT EXISTS image_rooms (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    image_id INTEGER NOT NULL,
-    room TEXT NOT NULL,
-    FOREIGN KEY (image_id) REFERENCES images(id),
-    UNIQUE(image_id, room)
-);
-
--- View angles for exterior photos
-CREATE TABLE IF NOT EXISTS image_view_angles (
-    image_id INTEGER NOT NULL,
-    view_angle TEXT NOT NULL,
-    PRIMARY KEY (image_id, view_angle),
-    FOREIGN KEY (image_id) REFERENCES images(id)
-);
-
 -- Materials catalog
 CREATE TABLE IF NOT EXISTS materials (
     id INTEGER PRIMARY KEY,
@@ -117,7 +100,7 @@ CREATE TABLE IF NOT EXISTS video_transcriptions (
     FOREIGN KEY (image_id) REFERENCES images(id)
 );
 
--- Video segments (rooms/materials with timestamps)
+-- Video segments (locations/materials with timestamps)
 CREATE TABLE IF NOT EXISTS video_segments (
     id INTEGER PRIMARY KEY,
     image_id INTEGER NOT NULL,
@@ -127,8 +110,29 @@ CREATE TABLE IF NOT EXISTS video_segments (
     end_time REAL NOT NULL,
     description TEXT,
     confidence TEXT,
+    location_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (image_id) REFERENCES images(id)
+    FOREIGN KEY (image_id) REFERENCES images(id),
+    FOREIGN KEY (location_id) REFERENCES locations(id)
+);
+
+-- Hierarchical locations
+CREATE TABLE IF NOT EXISTS locations (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    parent_id INTEGER,
+    full_path TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    FOREIGN KEY (parent_id) REFERENCES locations(id)
+);
+
+-- Locations linked to images
+CREATE TABLE IF NOT EXISTS image_locations (
+    image_id INTEGER NOT NULL,
+    location_id INTEGER NOT NULL,
+    PRIMARY KEY (image_id, location_id),
+    FOREIGN KEY (image_id) REFERENCES images(id),
+    FOREIGN KEY (location_id) REFERENCES locations(id)
 );
 
 -- Indexes
@@ -137,6 +141,9 @@ CREATE INDEX IF NOT EXISTS idx_construction_phase ON images(construction_phase);
 CREATE INDEX IF NOT EXISTS idx_filename ON images(filename);
 CREATE INDEX IF NOT EXISTS idx_materials_category ON materials(category);
 CREATE INDEX IF NOT EXISTS idx_video_segments_image ON video_segments(image_id);
+CREATE INDEX IF NOT EXISTS idx_image_locations_image ON image_locations(image_id);
+CREATE INDEX IF NOT EXISTS idx_image_locations_location ON image_locations(location_id);
+CREATE INDEX IF NOT EXISTS idx_locations_parent ON locations(parent_id);
 """
 
 def init_db():

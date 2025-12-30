@@ -92,54 +92,6 @@ def get_status():
     })
 
 
-@app.route('/api/rooms')
-def get_rooms():
-    """Get list of rooms with image counts."""
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Get rooms for interior images from junction table
-    cursor.execute('''
-        SELECT ir.room, COUNT(*) as count
-        FROM image_rooms ir
-        JOIN images i ON ir.image_id = i.id
-        WHERE i.interior_exterior = 'interior'
-        GROUP BY ir.room
-        ORDER BY ir.room
-    ''')
-    rooms = [{'name': row['room'], 'count': row['count']} for row in cursor.fetchall()]
-
-    # Get total count
-    cursor.execute("SELECT COUNT(*) as count FROM images WHERE interior_exterior = 'interior'")
-    total = cursor.fetchone()['count']
-
-    # Get exterior count
-    cursor.execute("SELECT COUNT(*) as count FROM images WHERE interior_exterior = 'exterior'")
-    exterior = cursor.fetchone()['count']
-
-    # Get count of images with linked materials
-    cursor.execute("SELECT COUNT(DISTINCT image_id) as count FROM image_materials")
-    materials = cursor.fetchone()['count']
-
-    # Get count of videos (exclude Live Photos under 5 seconds)
-    cursor.execute("""SELECT COUNT(*) as count FROM images
-        WHERE (lower(current_path) LIKE '%.mov' OR lower(current_path) LIKE '%.mp4' OR lower(current_path) LIKE '%.m4v')
-        AND (duration IS NULL OR duration >= 5)""")
-    videos = cursor.fetchone()['count']
-
-    # Get count of favorites
-    cursor.execute("SELECT COUNT(*) as count FROM images WHERE favorite = 1 AND hidden = 0")
-    favorites = cursor.fetchone()['count']
-
-    conn.close()
-    return jsonify({
-        'rooms': rooms,
-        'total_interior': total,
-        'total_exterior': exterior,
-        'total_materials': materials,
-        'total_videos': videos,
-        'total_favorites': favorites
-    })
 
 
 @app.route('/api/images')
@@ -462,68 +414,8 @@ def serve_video(image_id):
     return send_file(source_path, mimetype=mimetype)
 
 
-@app.route('/api/images/<int:image_id>/room', methods=['POST'])
-def update_room(image_id):
-    """Update room classification for an image. Accepts single room or array of rooms."""
-    if err := check_read_only(): return err
-    data = request.get_json()
-    rooms = data.get('rooms', [])
-
-    # Support both single room and array of rooms
-    if not rooms and data.get('room'):
-        rooms = [data.get('room')]
-
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Mark as human verified
-    cursor.execute('''UPDATE images SET human_verified = 1, verified_at = datetime('now')
-                      WHERE id = ?''', (image_id,))
-
-    # Update image_rooms junction table with all rooms
-    cursor.execute('DELETE FROM image_rooms WHERE image_id = ?', (image_id,))
-    for room in rooms:
-        cursor.execute('INSERT INTO image_rooms (image_id, room) VALUES (?, ?)', (image_id, room))
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({'success': True, 'rooms': rooms})
 
 
-@app.route('/api/images/<int:image_id>/view_angles', methods=['POST'])
-def update_view_angles(image_id):
-    """Update view angle classification for an exterior image. Accepts array of view angles."""
-    if err := check_read_only(): return err
-    data = request.get_json()
-    view_angles = data.get('view_angles', [])
-
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Mark as human verified
-    cursor.execute('''UPDATE images SET human_verified = 1, verified_at = datetime('now')
-                      WHERE id = ?''', (image_id,))
-
-    # Update image_view_angles junction table with all view angles
-    cursor.execute('DELETE FROM image_view_angles WHERE image_id = ?', (image_id,))
-    for angle in view_angles:
-        cursor.execute('INSERT INTO image_view_angles (image_id, view_angle) VALUES (?, ?)', (image_id, angle))
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({'success': True, 'view_angles': view_angles})
-
-
-@app.route('/api/all_rooms')
-def get_all_rooms():
-    """Get list of all valid room names from the database."""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT DISTINCT room FROM image_rooms WHERE room IS NOT NULL ORDER BY room')
-    rooms = [row['room'] for row in cursor.fetchall()]
-    return jsonify({'rooms': rooms})
 
 
 @app.route('/api/locations')
@@ -706,44 +598,6 @@ def bulk_update():
     return jsonify({'success': True, 'updated': updated})
 
 
-@app.route('/api/view_angles')
-def get_view_angles():
-    """Get list of view angles with counts for exterior images."""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT iva.view_angle, COUNT(*) as count
-        FROM image_view_angles iva
-        JOIN images i ON iva.image_id = i.id
-        WHERE i.interior_exterior = 'exterior'
-        GROUP BY iva.view_angle
-        ORDER BY iva.view_angle
-    ''')
-    angles = [{'name': row['view_angle'], 'count': row['count']} for row in cursor.fetchall()]
-
-    # Add unclassified count (exterior images with no view angles)
-    cursor.execute('''
-        SELECT COUNT(*) as count
-        FROM images i
-        WHERE i.interior_exterior = 'exterior'
-        AND NOT EXISTS (SELECT 1 FROM image_view_angles iva WHERE iva.image_id = i.id)
-    ''')
-    unclassified_count = cursor.fetchone()['count']
-    if unclassified_count > 0:
-        angles.append({'name': 'unclassified', 'count': unclassified_count})
-
-    conn.close()
-    return jsonify({'view_angles': angles})
-
-
-@app.route('/api/all_view_angles')
-def get_all_view_angles():
-    """Get list of all valid view angle names from the database."""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT DISTINCT view_angle FROM image_view_angles WHERE view_angle IS NOT NULL ORDER BY view_angle')
-    angles = [row['view_angle'] for row in cursor.fetchall()]
-    return jsonify({'view_angles': angles})
 
 
 @app.route('/api/material_categories')
@@ -806,33 +660,6 @@ def get_all_materials():
     return jsonify({'materials': materials_by_category})
 
 
-@app.route('/api/images/<int:image_id>/view_angle', methods=['POST'])
-def update_view_angle(image_id):
-    """Update view angle(s) for an image. Accepts single view_angle or array of view_angles."""
-    if err := check_read_only(): return err
-    data = request.get_json()
-    view_angles = data.get('view_angles', [])
-
-    # Support both single view_angle and array of view_angles
-    if not view_angles and data.get('view_angle'):
-        view_angles = [data.get('view_angle')]
-
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Mark as human verified
-    cursor.execute('''UPDATE images SET human_verified = 1, verified_at = datetime('now')
-                      WHERE id = ?''', (image_id,))
-
-    # Update image_view_angles junction table with all view angles
-    cursor.execute('DELETE FROM image_view_angles WHERE image_id = ?', (image_id,))
-    for angle in view_angles:
-        cursor.execute('INSERT INTO image_view_angles (image_id, view_angle) VALUES (?, ?)', (image_id, angle))
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({'success': True, 'view_angles': view_angles})
 
 
 @app.route('/api/images/<int:image_id>/materials', methods=['POST'])
@@ -1081,31 +908,6 @@ def update_favorite(image_id):
     return jsonify({'success': True, 'favorite': favorite})
 
 
-@app.route('/api/images/<int:image_id>/category', methods=['POST'])
-def update_category(image_id):
-    """Update category (interior/exterior) for an image."""
-    if err := check_read_only(): return err
-    data = request.get_json()
-    new_category = data.get('category')
-
-    if new_category not in ('interior', 'exterior'):
-        return jsonify({'error': 'Invalid category'}), 400
-
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''UPDATE images SET interior_exterior = ?, human_verified = 1, verified_at = datetime('now')
-                      WHERE id = ?''', (new_category, image_id))
-
-    # Clear the opposite table when switching interior/exterior
-    if new_category == 'interior':
-        cursor.execute('DELETE FROM image_view_angles WHERE image_id = ?', (image_id,))
-    else:  # exterior
-        cursor.execute('DELETE FROM image_rooms WHERE image_id = ?', (image_id,))
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({'success': True, 'category': new_category})
 
 
 @app.route('/api/images/<int:image_id>/locations', methods=['GET'])
