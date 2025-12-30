@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS images (
     current_path TEXT NOT NULL,
     file_hash TEXT,
 
+    -- Google Photos metadata
+    google_photos_url TEXT,
+    google_views INTEGER,
+
     -- Timestamps
     photo_taken_at DATETIME,
     uploaded_at DATETIME,
@@ -33,7 +37,9 @@ CREATE TABLE IF NOT EXISTS images (
     -- Camera/EXIF
     device_make TEXT,
     device_model TEXT,
+    ios_version TEXT,
     focal_length REAL,
+    focal_length_35mm INTEGER,
     aperture REAL,
     exposure_time REAL,
     iso INTEGER,

@@ -10,8 +10,8 @@ This application was developed collaboratively between a human product owner/arc
 
 The real power of this tool comes from pairing it with AI assistance:
 
-- **Photo Analysis** - Claude reviewed photos in batches, identifying rooms based on visual cues (window sizes, fixtures, floor types) and EXIF direction metadata
-- **Video Segmentation** - Claude analyzed video keyframes and transcriptions to identify room transitions and timestamp segments
+- **Photo Analysis** - Claude reviewed photos in batches, identifying locations based on visual cues (window sizes, fixtures, floor types) and EXIF direction metadata
+- **Video Segmentation** - Claude analyzed video keyframes and transcriptions to identify location transitions and timestamp segments
 - **Material Identification** - Claude matched visible materials to specs from invoices and manufacturer documents
 - **Data Correction** - Interactive review sessions where Claude proposed changes and the human confirmed/corrected them
 
@@ -21,10 +21,10 @@ The scripts in `scripts/` were designed for interactive use with AI assistance. 
 
 ## Features
 
-- **Photo/Video Browsing** - Grid view with filtering by room, phase, material, date
-- **Classification** - Interior/exterior, room tags, view angles, construction phases
+- **Photo/Video Browsing** - Grid view with filtering by location, phase, material, date
+- **Classification** - Hierarchical locations (Interior > Kitchen, Exterior > Front), construction phases
 - **Material Linking** - Link photos to a materials database (windows, doors, fixtures, etc.)
-- **Video Support** - Playback with transcription and room/time segments
+- **Video Support** - Playback with transcription and location/time segments
 - **Keyboard Navigation** - Arrow keys to browse, 'e' to edit
 
 ## Quick Start
@@ -165,9 +165,9 @@ See `CLAUDE.md` for full deployment instructions including Apache configuration.
 This project was built over several interactive sessions using Claude Code. Key development milestones:
 
 1. **Initial Setup** - Database schema, Flask app skeleton, basic grid view
-2. **Classification UI** - Dropdowns for rooms, phases, materials with auto-save
+2. **Classification UI** - Hierarchical locations, phases, materials with auto-save
 3. **Video Support** - Thumbnail generation, HTML5 playback, transcription integration
-4. **Room Identification** - Window size/direction table for validating room assignments
+4. **Location Identification** - Window size/direction table for validating location assignments
 5. **Material Database** - Catalog from Pella, Ferguson, Carter Lumber specs
 6. **Code Organization** - Refactored into `web/`, `data/`, `scripts/` structure
 
