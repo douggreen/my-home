@@ -7,6 +7,31 @@ let currentIndex = 0;
 function displayName(filename) {
     return filename ? filename.replace(/\.[^.]+$/, '') : '';
 }
+
+// Mobile sidebar toggle
+function toggleSidebar() {
+    document.querySelector('.sidebar').classList.toggle('open');
+    document.querySelector('.sidebar-overlay').classList.toggle('open');
+}
+
+function closeSidebarOnMobile() {
+    if (window.innerWidth <= 768) {
+        document.querySelector('.sidebar').classList.remove('open');
+        document.querySelector('.sidebar-overlay').classList.remove('open');
+    }
+}
+
+// Mobile filter toggle
+function toggleFilters() {
+    document.querySelector('.filter-bar').classList.toggle('filters-open');
+}
+
+function closeFiltersOnMobile() {
+    if (window.innerWidth <= 768) {
+        document.querySelector('.filter-bar').classList.remove('filters-open');
+    }
+}
+
 let allRooms = [];
 let allPhases = [];
 let allViewAngles = [];
@@ -71,6 +96,16 @@ function canEdit() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    // Default to XS size on mobile if user hasn't selected
+    if (window.innerWidth <= 768) {
+        const sizeSelect = document.getElementById('sizeSelect');
+        if (sizeSelect && sizeSelect.value === 'md') {  // 'md' is the default
+            sizeSelect.value = 'xs';
+            document.getElementById('imageGrid').classList.remove('size-md');
+            document.getElementById('imageGrid').classList.add('size-xs');
+        }
+    }
+
     checkReadOnlyStatus();
     loadRooms();
     loadAllRoomNames();
@@ -913,6 +948,9 @@ function setActiveRoom(name, location = 'interior') {
             }
         }
     });
+
+    // Close sidebar on mobile after selection
+    closeSidebarOnMobile();
 }
 
 // Debounce search input to avoid too many requests
@@ -934,6 +972,7 @@ function applyFilters() {
 
     // currentMaterialId is set by selectMaterialFilter() when a specific material is chosen
     loadImages(currentRoom, currentLocation, phase, month, currentViewAngle, currentMaterialCategory, showHidden, search, '', videosOnly, roomFilterValue, currentMaterialId);
+    closeFiltersOnMobile();
 }
 
 // Clear all filters
