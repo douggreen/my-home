@@ -1099,6 +1099,19 @@
             border-top-left-radius: 4px;
         }
 
+        /* Read-only mode - hide edit controls */
+        body.readonly-mode .image-checkbox,
+        body.readonly-mode .image-favorite,
+        body.readonly-mode .bulk-actions,
+        body.readonly-mode .modal-right select,
+        body.readonly-mode .modal-right button,
+        body.readonly-mode .modal-right .rooms-dropdown,
+        body.readonly-mode .modal-right .materials-dropdown,
+        body.readonly-mode .modal-right textarea,
+        body.readonly-mode .edit-controls {
+            display: none !important;
+        }
+
         .site-footer a {
             color: #c73e5a;
             text-decoration: none;
@@ -1185,13 +1198,18 @@
                 </div>
                 <button class="clear-filters" onclick="clearFilters()">Clear Filters</button>
                 <div class="filter-group" style="margin-left: auto; border-left: 1px solid #ddd; padding-left: 12px;">
-                    <label>Size:</label>
                     <select id="sizeSelect" onchange="changeImageSize()">
                         <option value="xs">XS</option>
                         <option value="sm">S</option>
                         <option value="md" selected>M</option>
                         <option value="lg">L</option>
                         <option value="xl">XL</option>
+                    </select>
+                </div>
+                <div class="filter-group readonly-toggle" id="readonlyToggle" style="display: none; border-left: 1px solid #ddd; padding-left: 12px;">
+                    <select id="readonlyMode" onchange="toggleEditControls()">
+                        <option value="readonly">Read-only</option>
+                        <option value="demo">Demo</option>
                     </select>
                 </div>
             </div>

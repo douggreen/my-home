@@ -16,8 +16,57 @@ let currentLocation = 'interior';
 let selectedIds = new Set();
 let searchTimeout = null;
 
+// Read-only mode state
+let isReadOnly = false;
+let showEditControlsInReadOnly = false;
+
+// Check server read-only status
+async function checkReadOnlyStatus() {
+    try {
+        const response = await fetch('/api/status');
+        const data = await response.json();
+        isReadOnly = data.read_only;
+
+        if (isReadOnly) {
+            // Show the toggle option
+            document.getElementById('readonlyToggle').style.display = 'block';
+            // Hide edit controls by default
+            updateEditControlsVisibility();
+        }
+    } catch (error) {
+        console.error('Error checking read-only status:', error);
+    }
+}
+
+// Toggle edit controls visibility in read-only mode
+function toggleEditControls() {
+    const mode = document.getElementById('readonlyMode').value;
+    showEditControlsInReadOnly = (mode === 'demo');
+    updateEditControlsVisibility();
+}
+
+// Update visibility of edit controls based on read-only state
+function updateEditControlsVisibility() {
+    const shouldHide = isReadOnly && !showEditControlsInReadOnly;
+    document.body.classList.toggle('readonly-mode', shouldHide);
+}
+
+// Show read-only message when attempting edits
+function showReadOnlyMessage() {
+    alert('This site is in read-only mode. Editing features are shown for demonstration purposes only. All changes are made locally and synced to the server.');
+    return false;
+}
+
+// Wrapper for edit operations - returns true if operation should proceed
+function canEdit() {
+    if (!isReadOnly) return true;
+    showReadOnlyMessage();
+    return false;
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    checkReadOnlyStatus();
     loadRooms();
     loadAllRoomNames();
     loadViewAngles();
@@ -1022,6 +1071,8 @@ function toggleSelect(event, imageId) {
 // Toggle favorite status
 async function toggleFavorite(event, imageId) {
     event.stopPropagation();
+    if (!canEdit()) return;
+
     const card = document.querySelector(`.image-card[data-id="${imageId}"]`);
     const heartEl = card.querySelector('.image-favorite');
     const isCurrentlyFavorite = heartEl.classList.contains('active');
@@ -1121,6 +1172,8 @@ function clearSelection() {
 
 // Apply bulk update
 async function applyBulkUpdate() {
+    if (!canEdit()) return;
+
     // Get selected category from radio button
     const categoryRadio = document.querySelector('#bulkCategoryDropdown input[type="radio"]:checked');
     const newCategory = categoryRadio ? categoryRadio.value : '';
@@ -1203,6 +1256,7 @@ async function applyBulkUpdate() {
 
 // Hide selected images
 async function hideSelected() {
+    if (!canEdit()) return;
     if (selectedIds.size === 0) {
         return;
     }
@@ -1233,6 +1287,7 @@ async function hideSelected() {
 
 // Unhide selected images
 async function unhideSelected() {
+    if (!canEdit()) return;
     if (selectedIds.size === 0) {
         return;
     }
@@ -2118,6 +2173,7 @@ function filterMaterialsList(searchText, containerId) {
 
 // Save rooms from dropdown
 async function saveRoomsFromDropdown() {
+    if (!canEdit()) return;
     const img = currentImages[currentIndex];
     const status = document.getElementById('saveStatus');
 
@@ -2160,6 +2216,7 @@ async function saveRoomsFromDropdown() {
 
 // Save materials from dropdown
 async function saveMaterialsFromDropdown() {
+    if (!canEdit()) return;
     const img = currentImages[currentIndex];
     const status = document.getElementById('saveStatus');
 
@@ -2205,6 +2262,7 @@ function populateCategoryDropdown() {
 
 // Save category from dropdown
 async function saveCategoryFromDropdown() {
+    if (!canEdit()) return;
     const img = currentImages[currentIndex];
     const status = document.getElementById('saveStatus');
 
@@ -2262,6 +2320,7 @@ function populatePhaseDropdown() {
 
 // Save phase from dropdown
 async function savePhaseFromDropdown() {
+    if (!canEdit()) return;
     const img = currentImages[currentIndex];
     const status = document.getElementById('saveStatus');
 

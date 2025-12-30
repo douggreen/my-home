@@ -106,10 +106,19 @@ Local (macOS)                    Production (Linux)
 ─────────────────                ─────────────────
 data/images/     ──prepare──►    data/web-images/
   (HEIC, MOV)                      (JPEG, MP4)
+     ↓                                  ↓
+  Read/Write                       Read-Only
 ```
 
-- **Local dev**: Source files in `data/images/`, converted on-the-fly (macOS only)
-- **Production**: Pre-converted files in `data/web-images/`, no conversion needed
+- **Local dev**: Source files in `data/images/`, full editing enabled
+- **Production**: Pre-converted files in `data/web-images/`, **read-only viewer**
+
+### Read-Only Production Mode
+
+Production is automatically read-only when `data/images/` doesn't exist:
+- All POST endpoints return 403 Forbidden
+- No edits, favorites, or classification changes allowed
+- All data manipulation done locally, then rsync to server
 
 ### Prepare Web-Ready Images
 

@@ -34,6 +34,9 @@ HAS_SOURCE_IMAGES = os.path.isdir(SOURCE_IMAGES_DIR) and bool(os.listdir(SOURCE_
 HAS_WEB_IMAGES = os.path.isdir(WEB_IMAGES_DIR)
 USE_WEB_IMAGES = HAS_WEB_IMAGES and not HAS_SOURCE_IMAGES
 
+# Production mode is read-only (no source images = no edits allowed)
+READ_ONLY = not HAS_SOURCE_IMAGES
+
 # Load settings
 def load_settings():
     if os.path.exists(SETTINGS_PATH):
@@ -54,6 +57,13 @@ def get_db():
     return conn
 
 
+def check_read_only():
+    """Return error response if in read-only mode, None otherwise."""
+    if READ_ONLY:
+        return jsonify({'error': 'Read-only mode - edits disabled in production'}), 403
+    return None
+
+
 def degrees_to_compass(degrees):
     """Convert degrees (0-360) to compass direction."""
     if degrees is None:
@@ -70,6 +80,16 @@ def degrees_to_compass(degrees):
 def index():
     """Serve main HTML page."""
     return render_template('index.html', site_title=SETTINGS.get('site_title', 'Photo Classification'))
+
+
+@app.route('/api/status')
+def get_status():
+    """Get server status including read-only mode."""
+    return jsonify({
+        'read_only': READ_ONLY,
+        'has_source_images': HAS_SOURCE_IMAGES,
+        'has_web_images': HAS_WEB_IMAGES
+    })
 
 
 @app.route('/api/rooms')
@@ -406,6 +426,7 @@ def serve_video(image_id):
 @app.route('/api/images/<int:image_id>/room', methods=['POST'])
 def update_room(image_id):
     """Update room classification for an image. Accepts single room or array of rooms."""
+    if err := check_read_only(): return err
     data = request.get_json()
     rooms = data.get('rooms', [])
 
@@ -434,6 +455,7 @@ def update_room(image_id):
 @app.route('/api/images/<int:image_id>/view_angles', methods=['POST'])
 def update_view_angles(image_id):
     """Update view angle classification for an exterior image. Accepts array of view angles."""
+    if err := check_read_only(): return err
     data = request.get_json()
     view_angles = data.get('view_angles', [])
 
@@ -535,6 +557,7 @@ def get_date_range():
 @app.route('/api/images/<int:image_id>/phase', methods=['POST'])
 def update_phase(image_id):
     """Update construction phase for an image."""
+    if err := check_read_only(): return err
     data = request.get_json()
     new_phase = data.get('phase')
 
@@ -551,6 +574,7 @@ def update_phase(image_id):
 @app.route('/api/images/bulk', methods=['POST'])
 def bulk_update():
     """Bulk update category, room, phase, view_angle, materials, and/or hidden for multiple images."""
+    if err := check_read_only(): return err
     data = request.get_json()
     image_ids = data.get('ids', [])
     new_category = data.get('category')  # interior, exterior, or materials
@@ -707,6 +731,7 @@ def get_all_materials():
 @app.route('/api/images/<int:image_id>/view_angle', methods=['POST'])
 def update_view_angle(image_id):
     """Update view angle(s) for an image. Accepts single view_angle or array of view_angles."""
+    if err := check_read_only(): return err
     data = request.get_json()
     view_angles = data.get('view_angles', [])
 
@@ -735,6 +760,7 @@ def update_view_angle(image_id):
 @app.route('/api/images/<int:image_id>/materials', methods=['POST'])
 def update_image_materials(image_id):
     """Update materials for an image. Accepts material_ids (specific) or categories (all in category)."""
+    if err := check_read_only(): return err
     data = request.get_json()
     material_ids = data.get('material_ids', [])
     categories = data.get('categories', [])
@@ -919,6 +945,7 @@ def get_video_transcription(image_id):
 @app.route('/api/images/<int:image_id>/notes', methods=['POST'])
 def update_image_notes(image_id):
     """Update description/notes for an image."""
+    if err := check_read_only(): return err
     data = request.get_json()
     description = data.get('description')
     material_notes = data.get('material_notes')
@@ -942,6 +969,7 @@ def update_image_notes(image_id):
 @app.route('/api/images/<int:image_id>/hidden', methods=['POST'])
 def update_hidden(image_id):
     """Toggle hidden status for an image."""
+    if err := check_read_only(): return err
     data = request.get_json()
     hidden = 1 if data.get('hidden') else 0
 
@@ -957,6 +985,7 @@ def update_hidden(image_id):
 @app.route('/api/images/<int:image_id>/favorite', methods=['POST'])
 def update_favorite(image_id):
     """Toggle favorite status for an image."""
+    if err := check_read_only(): return err
     data = request.get_json()
     favorite = 1 if data.get('favorite') else 0
 
@@ -972,6 +1001,7 @@ def update_favorite(image_id):
 @app.route('/api/images/<int:image_id>/category', methods=['POST'])
 def update_category(image_id):
     """Update category (interior/exterior) for an image."""
+    if err := check_read_only(): return err
     data = request.get_json()
     new_category = data.get('category')
 
