@@ -13,10 +13,10 @@ from datetime import datetime
 import re
 
 DB_PATH = Path(__file__).parent.parent / "data" / "photos.db"
-MEDIA_DIR = Path(__file__).parent
+MEDIA_DIR = Path(__file__).parent.parent / "data" / "images"
 
 # File extensions to process
-MEDIA_EXTENSIONS = {'.heic', '.jpg', '.jpeg', '.png', '.mov', '.mp4'}
+MEDIA_EXTENSIONS = {'.heic', '.jpg', '.jpeg', '.png', '.mov', '.mp4', '.webp'}
 
 
 def compute_file_hash(filepath: Path, chunk_size: int = 8192) -> str:
