@@ -376,18 +376,39 @@ def serve_image(image_id):
 
     # Check if cached version exists
     if not os.path.exists(cache_path):
-        # Convert using ffmpeg (cross-platform)
-        max_size = 300 if size == 'thumb' else 1200
-        try:
-            subprocess.run([
-                'ffmpeg', '-y',
-                '-i', source_path,
-                '-vf', f"scale='min({max_size},iw)':'min({max_size},ih)':force_original_aspect_ratio=decrease",
-                '-q:v', '2',  # High quality JPEG
-                cache_path
-            ], check=True, capture_output=True)
-        except subprocess.CalledProcessError:
-            abort(500)
+        is_heic = source_path.lower().endswith('.heic')
+
+        # Size limits - local dev shows full resolution, production uses pre-converted
+        THUMB_MAX = 300
+        FULL_MAX = None if not READ_ONLY else 1600  # No limit locally, capped in production
+
+        max_dim = THUMB_MAX if size == 'thumb' else FULL_MAX
+
+        if is_heic:
+            # Use sips for HEIC (ffmpeg can't decode full resolution)
+            try:
+                cmd = ['sips', '-s', 'format', 'jpeg']
+                if max_dim:
+                    cmd.extend(['-Z', str(max_dim)])
+                cmd.extend([source_path, '--out', cache_path])
+                subprocess.run(cmd, check=True, capture_output=True)
+            except subprocess.CalledProcessError:
+                abort(500)
+        else:
+            # Use ffmpeg for other formats (JPG, PNG, etc.)
+            if max_dim:
+                scale_filter = f"scale='min({max_dim},iw)':'min({max_dim},ih)':force_original_aspect_ratio=decrease"
+            else:
+                scale_filter = None
+
+            try:
+                cmd = ['ffmpeg', '-y', '-i', source_path]
+                if scale_filter:
+                    cmd.extend(['-vf', scale_filter])
+                cmd.extend(['-q:v', '2', cache_path])  # High quality JPEG
+                subprocess.run(cmd, check=True, capture_output=True)
+            except subprocess.CalledProcessError:
+                abort(500)
 
     return send_file(cache_path, mimetype='image/jpeg')
 

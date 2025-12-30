@@ -89,23 +89,40 @@ def process_image(row, force=False):
         return {'id': id, 'status': 'error', 'reason': f'source not found: {source}'}
 
     try:
-        # Convert to JPEG and resize for full image using ffmpeg
-        subprocess.run([
-            'ffmpeg', '-y',
-            '-i', str(source),
-            '-vf', f"scale='min({FULL_MAX_SIZE},iw)':'min({FULL_MAX_SIZE},ih)':force_original_aspect_ratio=decrease",
-            '-q:v', '2',  # High quality JPEG
-            str(full_out)
-        ], capture_output=True, check=True)
+        is_heic = str(source).lower().endswith('.heic')
 
-        # Create thumbnail
-        subprocess.run([
-            'ffmpeg', '-y',
-            '-i', str(source),
-            '-vf', f"scale='min({THUMB_SIZE},iw)':'min({THUMB_SIZE},ih)':force_original_aspect_ratio=decrease",
-            '-q:v', '3',  # Slightly lower quality for thumbs
-            str(thumb_out)
-        ], capture_output=True, check=True)
+        if is_heic:
+            # Use sips for HEIC (ffmpeg can't decode full resolution)
+            subprocess.run([
+                'sips', '-s', 'format', 'jpeg',
+                '-Z', str(FULL_MAX_SIZE),
+                str(source), '--out', str(full_out)
+            ], capture_output=True, check=True)
+
+            # Thumbnail - resize to max dimension
+            subprocess.run([
+                'sips', '-s', 'format', 'jpeg',
+                '-Z', str(THUMB_SIZE),
+                str(source), '--out', str(thumb_out)
+            ], capture_output=True, check=True)
+        else:
+            # Use ffmpeg for other formats (JPG, PNG, etc.)
+            subprocess.run([
+                'ffmpeg', '-y',
+                '-i', str(source),
+                '-vf', f"scale='min({FULL_MAX_SIZE},iw)':'min({FULL_MAX_SIZE},ih)':force_original_aspect_ratio=decrease",
+                '-q:v', '2',  # High quality JPEG
+                str(full_out)
+            ], capture_output=True, check=True)
+
+            # Create thumbnail
+            subprocess.run([
+                'ffmpeg', '-y',
+                '-i', str(source),
+                '-vf', f"scale='min({THUMB_SIZE},iw)':'min({THUMB_SIZE},ih)':force_original_aspect_ratio=decrease",
+                '-q:v', '3',  # Slightly lower quality for thumbs
+                str(thumb_out)
+            ], capture_output=True, check=True)
 
         return {'id': id, 'status': 'ok', 'type': 'image'}
 
