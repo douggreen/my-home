@@ -76,25 +76,43 @@ Open http://localhost:5001 in your browser.
 
 ## Video Processing
 
-**Process all videos:**
-```bash
-python scripts/process_videos.py
+### Primary Task: Create Video Segments
+
+The main goal of video processing is to create `video_segments` entries with **locations and timestamps**. Each segment identifies what location is visible and when (start/end times in seconds).
+
+**Workflow:**
+1. Extract keyframes at 1fps to `.cache/keyframes/{video_id}/`
+2. Review frames to identify location transitions
+3. Insert segments with timestamps into `video_segments` table
+4. Sync to `image_locations` for search/filtering
+
+**Video segments table:**
+```sql
+INSERT INTO video_segments (image_id, segment_type, segment_value, start_time, end_time, location_id, confidence)
+VALUES (23, 'location', 'cul-de-sac', 0.0, 15.5, 230, 'high');
 ```
-
-**Process single video:**
-```bash
-python scripts/process_videos.py {video_id}
-```
-
-Script handles: thumbnails, metadata, transcription (Whisper), keyframe extraction.
-
-**Video segments** stored in `video_segments` table with `location_id` foreign key and timestamps.
 
 **After adding segments**, sync to image_locations:
 ```sql
 INSERT OR IGNORE INTO image_locations (image_id, location_id)
 SELECT DISTINCT image_id, location_id FROM video_segments WHERE location_id IS NOT NULL;
 ```
+
+### Extract Keyframes
+
+```bash
+# Extract keyframes for a video
+ffmpeg -i data/images/VIDEO.MOV -vf "fps=1" .cache/keyframes/{id}/frame_%03d.jpg
+```
+
+### Process Videos Script
+
+```bash
+python scripts/process_videos.py        # All videos
+python scripts/process_videos.py {id}   # Single video
+```
+
+Script handles: thumbnails, metadata, transcription (Whisper), keyframe extraction.
 
 ---
 

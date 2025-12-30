@@ -191,7 +191,7 @@ def get_images():
         FROM images i
         {joins}
         WHERE {where_clause}
-        ORDER BY i.photo_taken_at, i.current_path
+        ORDER BY i.photo_taken_at DESC, i.current_path
     '''
     cursor.execute(query, params)
 
