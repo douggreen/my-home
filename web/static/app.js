@@ -1479,15 +1479,10 @@ async function loadMaterialDetails(imageId) {
 
 // View all images for a specific material
 function viewMaterialImages(materialId, materialName) {
-    // Close the modal
-    closeModal();
-
-    // Reset other filters
+    // Set filters BEFORE closeModal (which calls applyFilters)
     currentRoom = null;
     currentViewAngle = null;
     currentMaterialCategory = null;
-
-    // Set material filter
     currentMaterialId = materialId;
     currentMaterialName = materialName;
     currentLocation = 'materials';
@@ -1498,8 +1493,8 @@ function viewMaterialImages(materialId, materialName) {
     // Clear sidebar selection and highlight materials
     setActiveRoom(null, 'materials');
 
-    // Apply the filter
-    applyFilters();
+    // Close modal (this calls applyFilters with the correct filter state)
+    closeModal();
 }
 
 // Toggle transcript visibility
