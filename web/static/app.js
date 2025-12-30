@@ -2,6 +2,11 @@
 
 let currentImages = [];
 let currentIndex = 0;
+
+// Strip file extension from filename for display
+function displayName(filename) {
+    return filename ? filename.replace(/\.[^.]+$/, '') : '';
+}
 let allRooms = [];
 let allPhases = [];
 let allViewAngles = [];
@@ -1031,11 +1036,11 @@ async function loadImages(room = null, location = 'interior', phase = '', month 
                 <div class="image-checkbox" onclick="toggleSelect(event, ${img.id})"></div>
                 <div class="image-favorite ${img.favorite ? 'active' : ''}" onclick="toggleFavorite(event, ${img.id})" title="Favorite">♥</div>
                 <div class="image-wrapper" onclick="openModal(${index})">
-                    <img src="/image/${img.id}?size=thumb" alt="${img.filename}" loading="lazy">
+                    <img src="/image/${img.id}?size=thumb" alt="${displayName(img.filename)}" loading="lazy">
                     ${img.is_video ? `<div class="video-overlay"><span class="play-icon">▶</span>${durationLabel ? `<span class="video-duration">${durationLabel}</span>` : ''}</div>` : ''}
                 </div>
                 <div class="image-info" onclick="openModal(${index})">
-                    <div class="image-filename">${img.filename}</div>
+                    <div class="image-filename">${displayName(img.filename)}</div>
                     <div class="image-room">${displayLabel}</div>
                     ${img.construction_phase ? `<div class="image-phase">${img.construction_phase}</div>` : ''}
                 </div>
@@ -1348,7 +1353,7 @@ function openModal(index) {
     }
 
     // Set filename
-    document.getElementById('modalFilename').textContent = img.filename;
+    document.getElementById('modalFilename').textContent = displayName(img.filename);
     document.getElementById('modalCompass').textContent = img.compass_direction ? `Facing ${img.compass_direction}` : '';
 
     // Build meta info line (date and duration for videos)
