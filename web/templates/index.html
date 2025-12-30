@@ -1087,6 +1087,26 @@
                 max-height: 40vh;
             }
         }
+
+        .site-footer {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            color: #999;
+            background: rgba(255, 255, 255, 0.9);
+            border-top-left-radius: 4px;
+        }
+
+        .site-footer a {
+            color: #c73e5a;
+            text-decoration: none;
+        }
+
+        .site-footer a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -1362,6 +1382,10 @@
         <button class="btn-unhide" id="unhideBtn" onclick="unhideSelected()" style="display: none;">Unhide</button>
         <button class="btn-clear" onclick="clearSelection()">Clear</button>
     </div>
+
+    <footer class="site-footer">
+        MyHome available on <a href="https://github.com/douggreen/my-home" target="_blank">GitHub</a>
+    </footer>
 
     <script src="/static/app.js"></script>
 </body>

@@ -125,6 +125,41 @@ pip install openai-whisper
 python scripts/process_videos.py
 ```
 
+## Deployment
+
+### Requirements
+
+- Python 3.8+
+- ffmpeg (for image/video conversion)
+
+### Prepare Web-Ready Images
+
+Before deploying, convert source images to web-optimized formats:
+
+```bash
+python scripts/prepare_web_images.py
+```
+
+This creates `data/web-images/` with:
+- `full/` - Full-size JPEGs (max 1600px)
+- `thumb/` - Thumbnails (300px)
+- `video/` - Streaming-ready MP4s (H.264 + faststart)
+
+### Deploy to Server
+
+```bash
+# On server
+cd /var/www/myhome
+./scripts/setup.sh
+
+# Upload from local machine
+rsync -avz data/photos.db server:/var/www/myhome/data/
+rsync -avz data/settings.json server:/var/www/myhome/data/
+rsync -avz data/web-images/ server:/var/www/myhome/data/web-images/
+```
+
+See `CLAUDE.md` for full deployment instructions including Apache configuration.
+
 ## Development
 
 This project was built over several interactive sessions using Claude Code. Key development milestones:

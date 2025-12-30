@@ -45,7 +45,8 @@ sqlite3 data/photos.db "SELECT 'INSERT INTO image_rooms (image_id, room) VALUES 
 | Templates | `web/templates/` |
 | Settings | `data/settings.json` |
 | Database | `data/photos.db` |
-| Images | `data/images/` |
+| Source images | `data/images/` |
+| Web-ready images | `data/web-images/` |
 | Specs/invoices | `data/specs/` |
 | Thumbnails | `.cache/jpg-preview/{id}.jpg` |
 | Video keyframes | `.cache/keyframes/{video_id}/` |
@@ -92,4 +93,95 @@ Script handles: thumbnails, metadata, transcription (Whisper), keyframe extracti
 INSERT OR IGNORE INTO image_rooms (image_id, room)
 SELECT DISTINCT image_id, segment_value FROM video_segments WHERE segment_type = 'room';
 UPDATE images SET interior_exterior = 'interior' WHERE id = {video_id};
+```
+
+---
+
+## Deployment
+
+### Architecture
+
+```
+Local (macOS)                    Production (Linux)
+─────────────────                ─────────────────
+data/images/     ──prepare──►    data/web-images/
+  (HEIC, MOV)                      (JPEG, MP4)
+```
+
+- **Local dev**: Source files in `data/images/`, converted on-the-fly (macOS only)
+- **Production**: Pre-converted files in `data/web-images/`, no conversion needed
+
+### Prepare Web-Ready Images
+
+Run locally before deploying:
+
+```bash
+python scripts/prepare_web_images.py
+```
+
+Creates `data/web-images/`:
+| Directory | Contents |
+|-----------|----------|
+| `full/` | Full-size JPEGs (max 1600px) |
+| `thumb/` | Thumbnails (300px) |
+| `video/` | Streaming-ready MP4s (H.264 + faststart) |
+
+Options:
+- `python scripts/prepare_web_images.py 123` - Process single ID
+- `python scripts/prepare_web_images.py --force` - Reprocess existing
+
+### Deploy to Server
+
+Upload to server (e.g., `/var/www/myhome/`):
+
+```bash
+# Required files
+rsync -avz data/photos.db server:/var/www/myhome/data/
+rsync -avz data/settings.json server:/var/www/myhome/data/
+rsync -avz data/web-images/ server:/var/www/myhome/data/web-images/
+
+# App code (or use git pull on server)
+rsync -avz web/ server:/var/www/myhome/web/
+rsync -avz scripts/ server:/var/www/myhome/scripts/
+```
+
+### Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `DATA_DIR` | Path to data directory | `../data` relative to web/ |
+| `PHOTOS_BASE_PATH` | Path to source images | Same as DATA_DIR |
+
+### Server Requirements
+
+- Python 3.8+
+- Flask
+- No ffmpeg/sips needed (uses pre-converted files)
+
+### Apache Configuration
+
+```apache
+<VirtualHost *:80>
+    ServerName myhome.example.com
+
+    WSGIDaemonProcess myhome python-path=/var/www/myhome
+    WSGIScriptAlias / /var/www/myhome/web/app.wsgi
+
+    <Directory /var/www/myhome/web>
+        Require all granted
+    </Directory>
+
+    # Basic auth
+    <Location />
+        AuthType Basic
+        AuthName "MyHome"
+        AuthUserFile /var/www/myhome/.htpasswd
+        Require valid-user
+    </Location>
+</VirtualHost>
+```
+
+Create `.htpasswd`:
+```bash
+htpasswd -c /var/www/myhome/.htpasswd username
 ```

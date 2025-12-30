@@ -16,11 +16,23 @@ app = Flask(__name__)
 # Configuration
 APP_DIR = os.path.dirname(__file__)
 PROJECT_ROOT = os.path.dirname(APP_DIR)
-DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
+DATA_DIR = os.environ.get('DATA_DIR', os.path.join(PROJECT_ROOT, 'data'))
 DB_PATH = os.path.join(DATA_DIR, 'photos.db')
 SETTINGS_PATH = os.path.join(DATA_DIR, 'settings.json')
 PHOTOS_BASE_PATH = os.environ.get('PHOTOS_BASE_PATH', DATA_DIR)
 CACHE_DIR = '/tmp/photo_cache'
+
+# Web-ready images directory (pre-converted for production)
+WEB_IMAGES_DIR = os.path.join(DATA_DIR, 'web-images')
+
+# Source images directory (original HEIC/MOV files for local development)
+SOURCE_IMAGES_DIR = os.path.join(DATA_DIR, 'images')
+
+# If source images exist, prefer on-the-fly conversion (local dev)
+# If only web-images exist, use those (production)
+HAS_SOURCE_IMAGES = os.path.isdir(SOURCE_IMAGES_DIR) and bool(os.listdir(SOURCE_IMAGES_DIR))
+HAS_WEB_IMAGES = os.path.isdir(WEB_IMAGES_DIR)
+USE_WEB_IMAGES = HAS_WEB_IMAGES and not HAS_SOURCE_IMAGES
 
 # Load settings
 def load_settings():
@@ -301,9 +313,17 @@ def get_images():
 
 @app.route('/image/<int:image_id>')
 def serve_image(image_id):
-    """Serve image as JPEG, converting from HEIC if needed. For videos, serve thumbnail."""
+    """Serve image as JPEG. Uses pre-converted web-images if available, otherwise converts on-the-fly."""
     size = request.args.get('size', 'thumb')  # thumb or full
 
+    # Try web-images directory first (production mode)
+    if USE_WEB_IMAGES:
+        subdir = 'thumb' if size == 'thumb' else 'full'
+        web_image_path = os.path.join(WEB_IMAGES_DIR, subdir, f'{image_id}.jpg')
+        if os.path.exists(web_image_path):
+            return send_file(web_image_path, mimetype='image/jpeg')
+
+    # Fall back to on-the-fly conversion (local dev on macOS)
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('SELECT current_path FROM images WHERE id = ?', (image_id,))
@@ -317,16 +337,18 @@ def serve_image(image_id):
     if not os.path.exists(source_path):
         abort(404)
 
-    # Check if it's a video
+    # Check if it's a video - serve thumbnail
     is_video = source_path.lower().endswith(('.mov', '.mp4', '.m4v'))
 
     if is_video:
-        # For videos, serve the cached thumbnail from jpg-preview
-        preview_cache = os.path.join(PROJECT_ROOT, '.cache', 'jpg-preview', f'{image_id}.jpg')
-        if os.path.exists(preview_cache):
-            return send_file(preview_cache, mimetype='image/jpeg')
-        else:
-            abort(404)
+        # Try web-images thumb first, then legacy .cache/jpg-preview
+        for thumb_path in [
+            os.path.join(WEB_IMAGES_DIR, 'thumb', f'{image_id}.jpg'),
+            os.path.join(PROJECT_ROOT, '.cache', 'jpg-preview', f'{image_id}.jpg')
+        ]:
+            if os.path.exists(thumb_path):
+                return send_file(thumb_path, mimetype='image/jpeg')
+        abort(404)
 
     # Generate cache key for images
     cache_key = hashlib.md5(f"{source_path}_{size}".encode()).hexdigest()
@@ -334,14 +356,15 @@ def serve_image(image_id):
 
     # Check if cached version exists
     if not os.path.exists(cache_path):
-        # Convert using sips
+        # Convert using ffmpeg (cross-platform)
         max_size = 300 if size == 'thumb' else 1200
         try:
             subprocess.run([
-                'sips', '-s', 'format', 'jpeg',
-                source_path,
-                '--out', cache_path,
-                '-Z', str(max_size)
+                'ffmpeg', '-y',
+                '-i', source_path,
+                '-vf', f"scale='min({max_size},iw)':'min({max_size},ih)':force_original_aspect_ratio=decrease",
+                '-q:v', '2',  # High quality JPEG
+                cache_path
             ], check=True, capture_output=True)
         except subprocess.CalledProcessError:
             abort(500)
@@ -351,7 +374,14 @@ def serve_image(image_id):
 
 @app.route('/video/<int:image_id>')
 def serve_video(image_id):
-    """Serve video file for playback."""
+    """Serve video file for playback. Uses pre-converted web-images if available."""
+    # Try web-images directory first (production mode - streaming-ready MP4)
+    if USE_WEB_IMAGES:
+        web_video_path = os.path.join(WEB_IMAGES_DIR, 'video', f'{image_id}.mp4')
+        if os.path.exists(web_video_path):
+            return send_file(web_video_path, mimetype='video/mp4')
+
+    # Fall back to original video (local dev)
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('SELECT current_path FROM images WHERE id = ?', (image_id,))
