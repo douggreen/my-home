@@ -105,13 +105,21 @@ def import_media_file(conn: sqlite3.Connection, media_path: Path) -> bool:
     """Import a single media file's metadata into the database."""
     cursor = conn.cursor()
 
-    # Check if already imported
-    cursor.execute("SELECT id FROM images WHERE current_path = ?", (str(media_path),))
+    # Use relative path (images/filename) for consistency
+    relative_path = f"images/{media_path.name}"
+
+    # Check if already imported by path
+    cursor.execute("SELECT id FROM images WHERE current_path = ?", (relative_path,))
     if cursor.fetchone():
         return False  # Already exists
 
     # Compute file hash
     file_hash = compute_file_hash(media_path)
+
+    # Also check by file_hash to catch duplicates with different paths
+    cursor.execute("SELECT id FROM images WHERE file_hash = ?", (file_hash,))
+    if cursor.fetchone():
+        return False  # Duplicate file
 
     # Load Google Photos JSON metadata
     json_path = find_json_for_media(media_path)
@@ -147,7 +155,7 @@ def import_media_file(conn: sqlite3.Connection, media_path: Path) -> bool:
     # Build insert data
     data = {
         'filename': media_path.name,
-        'current_path': str(media_path),
+        'current_path': relative_path,
         'file_hash': file_hash,
         'google_photos_url': google_meta.get('url'),
         'google_views': int(google_meta.get('imageViews', 0)) if google_meta.get('imageViews') else None,

@@ -44,10 +44,16 @@ sqlite3 data/photos.db "SELECT 'UPDATE locations SET name = ''old_name'' WHERE i
 | Source images | `data/images/` |
 | Web-ready images | `data/web-images/` |
 | Specs/invoices | `data/specs/` |
-| Thumbnails | `.cache/jpg-preview/{id}.jpg` |
 | Video keyframes | `.cache/keyframes/{video_id}/` |
 | Undo scripts | `.cache/undo/` |
 | Private docs | `data/CLAUDE.md` |
+
+**Web-ready images** (`data/web-images/`) are used for both local classification and deployment:
+- `full/{id}.jpg` - Full-size (1600px) for viewing/classification
+- `thumb/{id}.jpg` - Thumbnails (300px) for grid view
+- `video/{id}.mp4` - Streaming-ready videos
+
+Run `python scripts/prepare_web_images.py` after importing new images.
 
 ---
 
