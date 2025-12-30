@@ -1010,9 +1010,10 @@
             /* Hide filter bar by default on mobile */
             .filter-bar {
                 display: none !important;
-                padding: 10px;
-                gap: 10px;
-                flex-direction: column;
+                padding: 8px;
+                gap: 6px;
+                flex-direction: row;
+                flex-wrap: wrap;
             }
 
             .filter-bar.filters-open {
@@ -1021,7 +1022,31 @@
 
             .filter-bar.filters-open > * {
                 display: flex !important;
-                width: 100%;
+            }
+
+            /* Filter groups expand to fit content */
+            .filter-bar.filters-open .filter-group {
+                flex: 0 0 auto;
+                min-width: 0;
+            }
+
+            /* Compact buttons and selects on mobile */
+            .filter-bar.filters-open .filter-dropdown-btn,
+            .filter-bar.filters-open select,
+            .filter-bar.filters-open input[type="text"] {
+                min-width: 0;
+                padding: 5px 18px 5px 6px;
+                font-size: 0.75rem;
+            }
+
+            .filter-bar.filters-open .filter-dropdown-btn {
+                background-position: right 4px center;
+            }
+
+            /* Checkbox labels more compact */
+            .filter-bar.filters-open .filter-group label {
+                font-size: 0.7rem;
+                white-space: nowrap;
             }
 
             /* Keep readonly toggle hidden when it has inline display:none (local dev) */
@@ -1029,9 +1054,10 @@
                 display: none !important;
             }
 
-            .filter-bar.filters-open .filter-group select,
-            .filter-bar.filters-open .filter-group input[type="text"] {
-                flex: 1;
+            /* Clear filters button compact */
+            .filter-bar.filters-open .clear-filters {
+                font-size: 0.7rem;
+                padding: 4px 8px;
             }
 
             /* Remove desktop styling from size/mode on mobile */
