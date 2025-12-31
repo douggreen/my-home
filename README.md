@@ -8,12 +8,21 @@ This application was developed collaboratively between a human product owner/arc
 
 ### AI-Assisted Workflow
 
-The real power of this tool comes from pairing it with AI assistance:
+The real power of this tool comes from pairing it with [Claude Code](https://claude.com/claude-code) for interactive classification sessions:
 
-- **Photo Analysis** - Claude reviewed photos in batches, identifying locations based on visual cues (window sizes, fixtures, floor types) and EXIF direction metadata
-- **Video Segmentation** - Claude analyzed video keyframes and transcriptions to identify location transitions and timestamp segments
-- **Material Identification** - Claude matched visible materials to specs from invoices and manufacturer documents
-- **Data Correction** - Interactive review sessions where Claude proposed changes and the human confirmed/corrected them
+- **Photo Analysis** - Claude reviews photos in batches, identifying locations based on visual cues (window sizes, fixtures, floor types) and EXIF direction metadata
+- **Video Segmentation** - Claude analyzes video keyframes and transcriptions to identify location transitions, then creates `video_segments` entries with timestamps
+- **Material Identification** - Claude matches visible materials to specs from invoices and manufacturer documents stored in `data/specs/`
+- **Data Correction** - Interactive review sessions where Claude proposes changes and the human confirms/corrects them
+
+#### Interactive Classification with Claude Code
+
+During a Claude Code session, typical workflows include:
+
+1. **Room Identification** - Claude reads images, cross-references window sizes and compass direction from EXIF data against the property layout in `data/CLAUDE.md`, and updates the database
+2. **Video Segmentation** - Claude extracts keyframes, reviews them to identify location transitions, and inserts segments with start/end timestamps
+3. **Material Tagging** - Claude views photos, identifies visible materials (windows, flooring, fixtures), and links them to the materials database
+4. **Batch Updates** - Claude queries for unclassified images, analyzes them in groups, and applies classifications with human confirmation
 
 ### Scripts Note
 
@@ -118,7 +127,16 @@ Edit `data/settings.json`:
 
 ## Video Processing
 
-To enable video transcription (requires [Whisper](https://github.com/openai/whisper)):
+Videos are processed to extract metadata, generate thumbnails, and transcribe audio.
+
+### Whisper Transcription
+
+[Whisper](https://github.com/openai/whisper) transcribes spoken audio from walk-through videos. This enables:
+
+- **Search** - Find videos by spoken content (e.g., search "kitchen" finds videos where someone says "now we're in the kitchen")
+- **Summaries** - Claude generates summaries from transcriptions for quick reference
+- **Segmentation** - Transcription helps identify location transitions when combined with keyframe analysis
+- **Display** - Full transcription shown in video detail panel
 
 ```bash
 pip install openai-whisper
@@ -171,7 +189,19 @@ This project was built over several interactive sessions using Claude Code. Key 
 5. **Material Database** - Catalog from Pella, Ferguson, Carter Lumber specs
 6. **Code Organization** - Refactored into `web/`, `data/`, `scripts/` structure
 
-The `CLAUDE.md` file contains instructions that help Claude understand the project context when resuming work. A private `data/CLAUDE.md` (gitignored) contains property-specific details.
+### CLAUDE.md Files
+
+This project uses two `CLAUDE.md` files:
+
+- **`CLAUDE.md`** (public, checked in) - Project instructions: database conventions, file locations, deployment process, video processing workflow
+- **`data/CLAUDE.md`** (private, gitignored) - Property-specific details that help Claude identify locations:
+  - Property address and neighbor info
+  - House orientation (which direction each side faces)
+  - Room layout and adjacencies
+  - Window sizes by room (used to identify rooms from photos)
+  - Key materials and finishes
+
+The private file enables Claude to say "this is the guest bedroom because it has a 36x72 north-facing window and 72x48 west-facing window" rather than just guessing.
 
 ## Credits
 
