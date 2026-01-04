@@ -655,7 +655,8 @@ def get_video_transcription(image_id):
     conn.close()
 
     if not row:
-        return jsonify({'transcription': None, 'summary': None, 'segments': [], 'whisper_segments': []})
+        # No transcription, but still return any segments that exist
+        return jsonify({'transcription': None, 'summary': None, 'segments': segments, 'whisper_segments': []})
 
     # Parse whisper segments for search functionality
     whisper_segments = []

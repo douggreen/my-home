@@ -49,19 +49,35 @@ def extract_metadata(conn, video_id, video_path):
     cursor = conn.cursor()
     cursor.execute("SELECT duration FROM images WHERE id = ?", (video_id,))
     row = cursor.fetchone()
-    if row and row['duration'] is not None:
+    # Check for actual valid duration (not just not-None, since 0.0 is invalid)
+    if row and row['duration'] and row['duration'] > 0:
         return True
 
     print(f"  Extracting metadata...")
+
+    # Ensure path is relative to data/ directory
+    if video_path.startswith('images/'):
+        full_path = f"data/{video_path}"
+    else:
+        full_path = video_path
+
+    if not os.path.exists(full_path):
+        print(f"  ERROR: File not found: {full_path}")
+        return False
+
     result = subprocess.run([
         'ffprobe', '-v', 'quiet', '-print_format', 'json',
-        '-show_format', '-show_streams', video_path
+        '-show_format', '-show_streams', full_path
     ], capture_output=True, text=True)
 
     try:
         meta = json.loads(result.stdout)
         fmt = meta.get('format', {})
         duration = float(fmt.get('duration', 0))
+
+        # Warn if duration is 0 - likely ffprobe issue
+        if duration == 0:
+            print(f"  WARNING: ffprobe returned duration=0, may need manual fix")
 
         video_streams = [s for s in meta.get('streams', []) if s.get('codec_type') == 'video']
         if video_streams:
